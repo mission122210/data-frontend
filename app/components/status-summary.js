@@ -6,6 +6,7 @@ export default function StatusSummary() {
     const [statusData, setStatusData] = useState("")
     const [summary, setSummary] = useState(null)
     const [isProcessing, setIsProcessing] = useState(false)
+    const [draggedItem, setDraggedItem] = useState(null)
 
     const analyzeSummary = () => {
         setIsProcessing(true)
@@ -41,6 +42,51 @@ export default function StatusSummary() {
         }
 
         setIsProcessing(false)
+    }
+
+    const handleDragStart = (e, status, count, index) => {
+        setDraggedItem({ status, count, index })
+        e.dataTransfer.effectAllowed = "move"
+    }
+
+    const handleDragOver = (e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+    }
+
+    const handleDrop = (e, targetStatus, targetCount, targetIndex) => {
+        e.preventDefault()
+
+        if (!draggedItem || draggedItem.index === targetIndex) {
+            return
+        }
+
+        // Merge the counts
+        const newCount = draggedItem.count + targetCount
+
+        // Create new status array
+        const newStatusCount = [...summary.statusCount]
+
+        // Update target with merged count
+        newStatusCount[targetIndex] = [targetStatus, newCount]
+
+        // Remove the dragged item
+        newStatusCount.splice(draggedItem.index, 1)
+
+        // Re-sort by count (descending)
+        newStatusCount.sort((a, b) => b[1] - a[1])
+
+        // Update summary
+        setSummary({
+            ...summary,
+            statusCount: newStatusCount,
+        })
+
+        setDraggedItem(null)
+    }
+
+    const handleDragEnd = () => {
+        setDraggedItem(null)
     }
 
     const downloadSummary = () => {
@@ -99,6 +145,7 @@ export default function StatusSummary() {
     const clearData = () => {
         setStatusData("")
         setSummary(null)
+        setDraggedItem(null)
     }
 
     return (
@@ -158,6 +205,7 @@ On Details
                 <div className="p-6">
                     <div className="flex justify-between items-center mb-4">
                         <h3 className="text-lg font-semibold text-gray-100">Status Summary (Grand Total: {summary.grandTotal})</h3>
+                        <div className="text-sm text-gray-400">💡 Drag and drop rows to merge similar statuses</div>
                     </div>
 
                     {/* Summary Table */}
@@ -182,27 +230,41 @@ On Details
                             <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {summary.statusCount.map(([status, count], index) => {
                                     const percentage = ((count / summary.grandTotal) * 100).toFixed(1)
+                                    const isDragging = draggedItem && draggedItem.index === index
+
                                     return (
-                                        <tr key={index} className="hover:bg-gray-700">
+                                        <tr
+                                            key={`${status}-${index}`}
+                                            draggable
+                                            onDragStart={(e) => handleDragStart(e, status, count, index)}
+                                            onDragOver={handleDragOver}
+                                            onDrop={(e) => handleDrop(e, status, count, index)}
+                                            onDragEnd={handleDragEnd}
+                                            className={`transition-all duration-200 cursor-move ${isDragging ? "opacity-50 bg-purple-900" : "hover:bg-gray-700 hover:shadow-lg"
+                                                }`}
+                                        >
                                             <td className="px-4 py-3 text-sm text-gray-100">
-                                                <span
-                                                    className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${status.includes("Online")
-                                                            ? "bg-green-900 text-green-300"
-                                                            : status.includes("Offline")
-                                                                ? "bg-red-900 text-red-300"
-                                                                : status.includes("Training")
-                                                                    ? "bg-yellow-900 text-yellow-300"
-                                                                    : status.includes("Details")
-                                                                        ? "bg-blue-900 text-blue-300"
-                                                                        : status.includes("Not interested")
-                                                                            ? "bg-gray-700 text-gray-300"
-                                                                            : status.includes("Blocked")
-                                                                                ? "bg-orange-900 text-orange-300"
-                                                                                : "bg-gray-700 text-gray-300"
-                                                        }`}
-                                                >
-                                                    {status}
-                                                </span>
+                                                <div className="flex items-center">
+                                                    <div className="mr-2 text-gray-500">⋮⋮</div>
+                                                    <span
+                                                        className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${status.includes("Online")
+                                                                ? "bg-green-900 text-green-300"
+                                                                : status.includes("Offline")
+                                                                    ? "bg-red-900 text-red-300"
+                                                                    : status.includes("Training")
+                                                                        ? "bg-yellow-900 text-yellow-300"
+                                                                        : status.includes("Details")
+                                                                            ? "bg-blue-900 text-blue-300"
+                                                                            : status.includes("Not interested")
+                                                                                ? "bg-gray-700 text-gray-300"
+                                                                                : status.includes("Blocked")
+                                                                                    ? "bg-orange-900 text-orange-300"
+                                                                                    : "bg-gray-700 text-gray-300"
+                                                            }`}
+                                                    >
+                                                        {status}
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td className="px-4 py-3 text-sm font-bold text-gray-100">{count}</td>
                                             <td className="px-4 py-3 text-sm text-gray-100">{percentage}%</td>
@@ -225,6 +287,21 @@ On Details
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Drag and Drop Instructions */}
+                    <div className="mt-4 p-4 bg-gray-700 rounded-lg border border-gray-600">
+                        <h4 className="text-sm font-medium text-gray-100 mb-2">🔄 Merge Similar Statuses:</h4>
+                        <div className="text-sm text-gray-300 space-y-1">
+                            <p>
+                                • <strong>Drag</strong> a status row by clicking and holding the ⋮⋮ handle
+                            </p>
+                            <p>
+                                • <strong>Drop</strong> it onto another status row to merge their counts
+                            </p>
+                            <p>• Example: Drag "rispose (5)" onto "Response (10)" → Result: "Response (15)"</p>
+                            <p>• The table will automatically re-sort by count after merging</p>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -234,8 +311,11 @@ On Details
                 <ul className="text-sm text-gray-300 space-y-1">
                     <li>1. Paste your status list in the textarea (one status per line)</li>
                     <li>2. Click "Analyze Summary" to count occurrences</li>
-                    <li>3. Review the summary table with counts and percentages</li>
-                    <li>4. Click "Download Summary" to export as .xls file</li>
+                    <li>
+                        3. <strong>Drag and drop rows to merge similar statuses</strong>
+                    </li>
+                    <li>4. Review the summary table with counts and percentages</li>
+                    <li>5. Click "Download Summary" to export as .xls file</li>
                 </ul>
             </div>
         </div>
