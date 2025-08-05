@@ -13,21 +13,43 @@ export default function DataMatcher() {
         const parsed = []
 
         lines.forEach((line) => {
-            const match = line.match(
-                /编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推荐人：Referrer:\s*(\w+)\s+公司Company Name\s*:(\w+)\s+语言:(\w+)(.*)$/,
+            // Try new format first: 编号:144 WhatsApp +15126347175 推手名字 : Emily 业务员 : ShAriQ年龄 : 21+ 公司:Indeed 语言:English
+            let match = line.match(
+                /编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*(\w+)\s+业务员\s*:\s*(\w+)年龄\s*:\s*[\w+]+\s+公司:(\w+)\s+语言:(\w+)(.*)$/,
             )
+
             if (match) {
                 const phone = match[2].replace(/\s+/g, "")
-                const status = hasStatus ? match[6].trim() : ""
+                const status = hasStatus ? match[7].trim() : ""
 
                 parsed.push({
                     id: match[1],
                     whatsapp: phone,
-                    referrer: match[3],
-                    company: match[4],
-                    language: match[5],
+                    referrer: match[3], // 推手名字
+                    company: match[5], // 公司
+                    language: match[6], // 语言
+                    businessPerson: match[4], // 业务员
                     status: status,
                 })
+            } else {
+                // Try old format: 编号:51 WhatsApp +19252141765 推荐人：Referrer: Mila 公司Company Name :indeed 语言:English
+                match = line.match(
+                    /编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推荐人：Referrer:\s*(\w+)\s+公司Company Name\s*:(\w+)\s+语言:(\w+)(.*)$/,
+                )
+
+                if (match) {
+                    const phone = match[2].replace(/\s+/g, "")
+                    const status = hasStatus ? match[6].trim() : ""
+
+                    parsed.push({
+                        id: match[1],
+                        whatsapp: phone,
+                        referrer: match[3],
+                        company: match[4],
+                        language: match[5],
+                        status: status,
+                    })
+                }
             }
         })
 
@@ -196,8 +218,11 @@ export default function DataMatcher() {
                                 {matchedData.map((row, index) => (
                                     <tr key={index} className="hover:bg-gray-700">
                                         <td className="px-4 py-3 text-sm text-gray-100">
-                                            编号:{row.id} WhatsApp {row.whatsapp} 推荐人：Referrer: {row.referrer} 公司Company Name :
-                                            {row.company} 语言:{row.language}
+                                            编号:{row.id} WhatsApp {row.whatsapp}{" "}
+                                            {row.businessPerson
+                                                ? `推手名字: ${row.referrer} 业务员: ${row.businessPerson} 公司:${row.company}`
+                                                : `推荐人：Referrer: ${row.referrer} 公司Company Name :${row.company}`}{" "}
+                                            语言:{row.language}
                                         </td>
                                         <td className="px-4 py-3 whitespace-nowrap text-sm">
                                             {row.status && (
