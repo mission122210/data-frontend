@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import DataMatcher from "./components/data-matcher"
-import StatusSummary from "./components/status-summary"
-import GroupReport from "./components/group-report"
+import DataMatcher from "../components/data-matcher"
+import StatusSummary from "../components/status-summary"
+import GroupReport from "../components/group-report"
+import WhatsAppLinkGenerator from "../components/whatsapp-link-generator"
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("data-matcher")
@@ -12,6 +13,7 @@ export default function Page() {
     { id: "data-matcher", name: "Data Matching", icon: "🔗" },
     { id: "status-summary", name: "Status Summary", icon: "📊" },
     { id: "group-report", name: "Group Report", icon: "📋" },
+    { id: "whatsapp-generator", name: "WhatsApp Generator", icon: "💬" },
   ]
 
   return (
@@ -53,6 +55,7 @@ export default function Page() {
         {activeTab === "data-matcher" && <DataMatcher />}
         {activeTab === "status-summary" && <StatusSummary />}
         {activeTab === "group-report" && <GroupReport />}
+        {activeTab === "whatsapp-generator" && <WhatsAppLinkGenerator />}
       </div>
     </div>
   )
