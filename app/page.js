@@ -5,6 +5,7 @@ import DataMatcher from "./components/data-matcher"
 import StatusSummary from "./components/status-summary"
 import GroupReport from "./components/group-report"
 import WhatsAppLinkGenerator from "./components/whatsapp-link-generator"
+import EmailSender from "./components/email-sender"
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("data-matcher")
@@ -14,6 +15,7 @@ export default function Page() {
     { id: "status-summary", name: "Status Summary", icon: "📊" },
     { id: "group-report", name: "Group Report", icon: "📋" },
     { id: "whatsapp-generator", name: "WhatsApp Generator", icon: "💬" },
+    { id: "email-sender", name: "Email Sender", icon: "📧" },
   ]
 
   return (
@@ -56,6 +58,7 @@ export default function Page() {
         {activeTab === "status-summary" && <StatusSummary />}
         {activeTab === "group-report" && <GroupReport />}
         {activeTab === "whatsapp-generator" && <WhatsAppLinkGenerator />}
+        {activeTab === "email-sender" && <EmailSender />}
       </div>
     </div>
   )
