@@ -6,6 +6,7 @@ import StatusSummary from "./components/status-summary"
 import GroupReport from "./components/group-report"
 import WhatsAppLinkGenerator from "./components/whatsapp-link-generator"
 import EmailSender from "./components/email-sender"
+import TeamDataDistributor from "./components/team-data-distributor"
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("data-matcher")
@@ -16,6 +17,7 @@ export default function Page() {
     { id: "group-report", name: "Group Report", icon: "📋" },
     { id: "whatsapp-generator", name: "WhatsApp Generator", icon: "💬" },
     { id: "email-sender", name: "Email Sender", icon: "📧" },
+    { id: "team-distributor", name: "Team Distributor", icon: "👥" },
   ]
 
   return (
@@ -40,8 +42,8 @@ export default function Page() {
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
                 className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === tab.id
-                    ? "border-blue-500 text-blue-400"
-                    : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
+                  ? "border-blue-500 text-blue-400"
+                  : "border-transparent text-gray-400 hover:text-gray-300 hover:border-gray-300"
                   }`}
               >
                 <span className="mr-2">{tab.icon}</span>
@@ -59,6 +61,7 @@ export default function Page() {
         {activeTab === "group-report" && <GroupReport />}
         {activeTab === "whatsapp-generator" && <WhatsAppLinkGenerator />}
         {activeTab === "email-sender" && <EmailSender />}
+        {activeTab === "team-distributor" && <TeamDataDistributor />}
       </div>
     </div>
   )
