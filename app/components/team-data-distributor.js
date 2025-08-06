@@ -52,7 +52,8 @@ export default function TeamDataDistributor() {
         const clients = []
 
         lines.forEach((line) => {
-            const match = line.match(/编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*([^业]+)\s+业务员\s*:\s*([^年]+)\s+年龄\s*:\s*([^公]+)\s+公司:([^语]+)\s+语言:(.+)/)
+            // Updated regex to be more flexible with spaces between fields
+            const match = line.match(/编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*([^业]+)\s*业务员\s*:\s*([^年]+)\s*年龄\s*:\s*([^公]+)\s*公司:([^语]+)\s*语言:(.+)$/)
 
             if (match) {
                 clients.push({
