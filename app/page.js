@@ -1,10 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import DataMatcher from "../components/data-matcher"
-import StatusSummary from "../components/status-summary"
-import GroupReport from "../components/group-report"
-import WhatsAppLinkGenerator from "../components/whatsapp-link-generator"
+import DataMatcher from "./components/data-matcher"
+import StatusSummary from "./components/status-summary"
+import GroupReport from "./components/group-report"
+import WhatsAppLinkGenerator from "./components/whatsapp-link-generator"
 
 export default function Page() {
   const [activeTab, setActiveTab] = useState("data-matcher")
