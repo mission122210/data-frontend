@@ -45,6 +45,8 @@ export default function TeamDataDistributor() {
 
             let name = parts[0]
             let initialData = 0
+            let initialMonthlyData = 0; // This is the fourth column (e.g., 60 for Alpha411)
+            let initialClients = 0; // This is the fifth column (e.g., 3 for Alpha411)
             let averageValue = Infinity; // Default to Infinity for #DIV/0! or missing
 
             // Check if there's an ID number after the name (e.g., Alpha 411)
@@ -55,7 +57,13 @@ export default function TeamDataDistributor() {
                 if (parts.length > 2 && !isNaN(parts[2])) {
                     initialData = parseInt(parts[2])
                 }
-                if (parts.length > 6) { // Assuming 6th part is the average
+                if (parts.length > 4 && !isNaN(parts[4])) { // Fourth part is monthly data
+                    initialMonthlyData = parseInt(parts[4])
+                }
+                if (parts.length > 5 && !isNaN(parts[5])) { // Fifth part is clients
+                    initialClients = parseInt(parts[5])
+                }
+                if (parts.length > 6) { // Sixth part is the average
                     const avgStr = parts[6];
                     averageValue = avgStr === "#DIV/0!" ? Infinity : parseFloat(avgStr);
                 }
@@ -64,7 +72,13 @@ export default function TeamDataDistributor() {
                 if (parts.length > 1 && !isNaN(parts[1])) {
                     initialData = parseInt(parts[1])
                 }
-                if (parts.length > 5) { // Assuming 5th part is the average for simpler input
+                if (parts.length > 3 && !isNaN(parts[3])) { // Third part is monthly data
+                    initialMonthlyData = parseInt(parts[3])
+                }
+                if (parts.length > 4 && !isNaN(parts[4])) { // Fourth part is clients
+                    initialClients = parseInt(parts[4])
+                }
+                if (parts.length > 5) { // Fifth part is the average for simpler input
                     const avgStr = parts[5];
                     averageValue = avgStr === "#DIV/0!" ? Infinity : parseFloat(avgStr);
                 }
@@ -73,6 +87,8 @@ export default function TeamDataDistributor() {
             teamMembers.push({
                 name,
                 initialData, // This is the 'DD' or initial count
+                initialMonthlyData,
+                initialClients,
                 currentData: initialData, // This will be updated
                 newClients: 0,
                 averageValue: averageValue // Store the parsed average value
@@ -176,15 +192,20 @@ export default function TeamDataDistributor() {
             });
 
 
-            // Update team data with new client counts
+            // Update team data with new client counts and recalculate average
             const updatedTeamData = teamMembers.map(member => {
                 const assignedMember = eligibleMembers.find(em => em.name === member.name)
                 const newClientsCount = assignedMember ? assignedMember.newClients : 0
 
+                const updatedClients = member.initialClients + newClientsCount;
+                const updatedMonthlyData = member.initialMonthlyData + newClientsCount; // Assuming MD increases by 1 for each new client
+                const newAverage = updatedClients > 0 ? (updatedMonthlyData / updatedClients) : Infinity;
+
                 return {
                     ...member,
                     currentData: member.initialData + newClientsCount, // Sum of initial + new
-                    newClients: newClientsCount
+                    newClients: newClientsCount,
+                    averageValue: newAverage // Update average based on new clients
                 }
             })
 
@@ -226,7 +247,18 @@ export default function TeamDataDistributor() {
                     // Update available clients for manual distribution
                     setAvailableClientsForManualDistribution(prevAvailable => prevAvailable - change);
 
-                    return { ...m, newClients: newNewClients, currentData: m.initialData + newNewClients };
+                    // Recalculate currentData and average based on manual change
+                    const updatedCurrentData = m.initialData + newNewClients;
+                    const updatedClients = m.initialClients + newNewClients;
+                    const updatedMonthlyData = m.initialMonthlyData + newNewClients; // Assuming MD increases by 1 for each new client
+                    const newAverage = updatedClients > 0 ? (updatedMonthlyData / updatedClients) : Infinity;
+
+                    return {
+                        ...m,
+                        newClients: newNewClients,
+                        currentData: updatedCurrentData,
+                        averageValue: newAverage // Update average based on manual newClients
+                    };
                 }
                 return m;
             });
@@ -263,7 +295,7 @@ export default function TeamDataDistributor() {
         let dataText = ""
         distributedData.forEach(client => {
             // Put data in one field and team member name in the next field (tab-separated)
-            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} کمپنی:${client.company} زبان:${client.language}`
+            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
             dataText += `${clientInfo}\t${client.assignedTo}\n`
         })
 
@@ -291,7 +323,7 @@ export default function TeamDataDistributor() {
         const messageText = clientsForMember
             .map(
                 (client) =>
-                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} عمر : ${client.age} کمپنی:${client.company} زبان:${client.language}`
+                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
             )
             .join("\n");
 
@@ -361,8 +393,8 @@ Mike431 1 40 41 3 13.66666667`}
                         <textarea
                             value={clientData}
                             onChange={(e) => setClientData(e.target.value)}
-                            placeholder={`编号:301 WhatsApp +19252166220 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ کمپنی:Swagbucks زبان:English
-编号:302 WhatsApp +18164908827 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ کمپنی:Swagbucks زبان:English
+                            placeholder={`编号:301 WhatsApp +19252166220 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
+编号:302 WhatsApp +18164908827 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
 ...`}
                             className="w-full h-60 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 text-sm font-mono text-gray-100 placeholder-gray-400"
                         />
@@ -490,14 +522,12 @@ Mike431 1 40 41 3 13.66666667`}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Team Master</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Data</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">New Assigned</th>
-                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Average</th> {/* New column for average */}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {processedTeamData.map((member, index) => {
                                     const isSent = sentMembers.has(member.name);
-                                    const averageColorClass = member.averageValue >= averageThreshold ? "text-red-400" : "text-green-400";
                                     return (
                                         <tr key={index} className="hover:bg-gray-700">
                                             <td className="px-4 py-3 text-sm font-medium text-gray-100">{member.name}</td>
@@ -512,9 +542,6 @@ Mike431 1 40 41 3 13.66666667`}
                                                     className="w-16 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:ring-orange-500 focus:border-orange-500"
                                                     min="0"
                                                 />
-                                            </td>
-                                            <td className={`px-4 py-3 text-sm font-bold ${averageColorClass}`}>
-                                                {member.averageValue === Infinity ? '#DIV/0!' : member.averageValue.toFixed(2)}
                                             </td>
                                             <td className="px-4 py-3 text-sm">
                                                 {member.newClients > 0 && telegramNumbers[member.name] ? (
@@ -572,7 +599,7 @@ Mike431 1 40 41 3 13.66666667`}
                         <div className="space-y-2 text-sm font-mono text-gray-100">
                             {distributedData.slice(0, 10).map((client, index) => (
                                 <div key={index} className="break-all">
-                                    编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 : {client.businessPerson} عمر : {client.age} کمپنی:{client.company} زبان:{client.language} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
+                                    编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 : {client.businessPerson} 年龄 : {client.age} 公司:{client.company} 语言:{client.language} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
                                 </div>
                             ))}
                             {distributedData.length > 10 && (
