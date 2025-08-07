@@ -10,7 +10,7 @@ export default function TeamDataDistributor() {
     const [minDataPerMember, setMinDataPerMember] = useState(4)
     const [averageThreshold, setAverageThreshold] = useState(30) // Now refers to the single data point
     const [processedTeamData, setProcessedTeamData] = useState([]) // Stores { name, initialData, currentData, newClients }
-    const [distributedData, setDistributedData] = useState([])
+    const [distributedData, setDistributedData] = useState([]) // Stores the *original* distribution of clients
     const [isProcessing, setIsProcessing] = useState(false)
     const [sentMembers, setSentMembers] = useState(new Set()); // New state to track sent members
     const [totalClientsDistributed, setTotalClientsDistributed] = useState(0); // Total clients initially distributed
@@ -152,15 +152,15 @@ export default function TeamDataDistributor() {
             }
 
             // Distribute clients
-            const distributedClients = [...clients]
+            const distributedClientsCopy = [...clients] // Use a copy for distribution
             let memberIndex = 0
 
             if (distributionMode === "minimum") {
                 // Ensure minimum data per member first
                 eligibleMembers.forEach(member => {
-                    for (let i = 0; i < minDataPerMember && memberIndex < distributedClients.length; i++) {
-                        if (!distributedClients[memberIndex].assignedTo) {
-                            distributedClients[memberIndex].assignedTo = member.name
+                    for (let i = 0; i < minDataPerMember && memberIndex < distributedClientsCopy.length; i++) {
+                        if (!distributedClientsCopy[memberIndex].assignedTo) {
+                            distributedClientsCopy[memberIndex].assignedTo = member.name
                             member.newClients++
                             memberIndex++
                         }
@@ -169,14 +169,14 @@ export default function TeamDataDistributor() {
 
                 // Distribute remaining data equally
                 let currentMemberIndex = 0
-                for (let i = memberIndex; i < distributedClients.length; i++) {
-                    distributedClients[i].assignedTo = eligibleMembers[currentMemberIndex].name
+                for (let i = memberIndex; i < distributedClientsCopy.length; i++) {
+                    distributedClientsCopy[i].assignedTo = eligibleMembers[currentMemberIndex].name
                     eligibleMembers[currentMemberIndex].newClients++
                     currentMemberIndex = (currentMemberIndex + 1) % eligibleMembers.length
                 }
             } else {
                 // Equal distribution
-                distributedClients.forEach((client, index) => {
+                distributedClientsCopy.forEach((client, index) => {
                     const memberIdx = index % eligibleMembers.length
                     client.assignedTo = eligibleMembers[memberIdx].name
                     eligibleMembers[memberIdx].newClients++
@@ -184,7 +184,7 @@ export default function TeamDataDistributor() {
             }
 
             // Sort distributed clients by assigned team member name
-            distributedClients.sort((a, b) => {
+            distributedClientsCopy.sort((a, b) => {
                 if (a.assignedTo === null && b.assignedTo === null) return 0;
                 if (a.assignedTo === null) return 1;
                 if (b.assignedTo === null) return -1;
@@ -210,7 +210,7 @@ export default function TeamDataDistributor() {
             })
 
             setProcessedTeamData(updatedTeamData)
-            setDistributedData(distributedClients)
+            setDistributedData(distributedClientsCopy) // Store the full, original distribution
             setSentMembers(new Set()); // Reset sent status on new distribution
             setTotalClientsDistributed(clients.length); // Set total clients
             setAvailableClientsForManualDistribution(0); // Initially, all are assigned
@@ -286,23 +286,52 @@ export default function TeamDataDistributor() {
         })
     }
 
+    // Helper function to get clients based on current processedTeamData counts
+    const getAdjustedClientsForOutput = () => {
+        const allClients = parseClientData(clientData); // Parse raw client data
+        const clientsForOutput = [];
+        let clientCursor = 0;
+
+        // Sort processedTeamData by name to ensure consistent output order
+        const sortedProcessedTeamData = [...processedTeamData].sort((a, b) => a.name.localeCompare(b.name));
+
+        sortedProcessedTeamData.forEach(member => {
+            const targetCount = member.newClients;
+            for (let i = 0; i < targetCount; i++) {
+                if (clientCursor < allClients.length) {
+                    clientsForOutput.push({
+                        ...allClients[clientCursor],
+                        assignedTo: member.name // Assign to the current member
+                    });
+                    clientCursor++;
+                } else {
+                    // No more clients in the original list to assign
+                    break;
+                }
+            }
+        });
+        return clientsForOutput;
+    };
+
+
     const copyDistributedData = () => {
-        if (distributedData.length === 0) {
-            alert("No distributed data to copy")
-            return
+        if (processedTeamData.length === 0) {
+            alert("No processed data to copy");
+            return;
         }
 
-        let dataText = ""
-        distributedData.forEach(client => {
-            // Put data in one field and team member name in the next field (tab-separated)
-            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
-            dataText += `${clientInfo}\t${client.assignedTo}\n`
-        })
+        let dataText = "";
+        const clientsToCopy = getAdjustedClientsForOutput(); // Get the adjusted list
+
+        clientsToCopy.forEach(client => {
+            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`;
+            dataText += `${clientInfo}\t${client.assignedTo}\n`;
+        });
 
         navigator.clipboard.writeText(dataText.trim()).then(() => {
-            alert("Distributed data copied to clipboard! Data will be in one column, team member names in the next column.")
-        })
-    }
+            alert("Distributed data copied to clipboard! Data will be in one column, team member names in the next column.");
+        });
+    };
 
     const handleSendToTelegram = (memberName) => {
         const rawPhoneNumber = telegramNumbers[memberName];
@@ -311,7 +340,8 @@ export default function TeamDataDistributor() {
             return;
         }
 
-        const clientsForMember = distributedData.filter(
+        const allAdjustedClients = getAdjustedClientsForOutput(); // Get the adjusted list
+        const clientsForMember = allAdjustedClients.filter(
             (client) => client.assignedTo === memberName
         );
 
@@ -490,7 +520,7 @@ Mike431 1 40 41 3 13.66666667`}
 
                     <button
                         onClick={copyDistributedData}
-                        disabled={distributedData.length === 0}
+                        disabled={processedTeamData.length === 0}
                         className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
                     >
                         📋 Copy Distributed Data
@@ -528,6 +558,7 @@ Mike431 1 40 41 3 13.66666667`}
                             <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {processedTeamData.map((member, index) => {
                                     const isSent = sentMembers.has(member.name);
+                                    // Average value is still calculated internally for distribution mode, but not displayed
                                     return (
                                         <tr key={index} className="hover:bg-gray-700">
                                             <td className="px-4 py-3 text-sm font-medium text-gray-100">{member.name}</td>
@@ -575,7 +606,7 @@ Mike431 1 40 41 3 13.66666667`}
             )}
 
             {/* Distributed Data Preview */}
-            {distributedData.length > 0 && (
+            {processedTeamData.length > 0 && (
                 <div className="p-6 border-b border-gray-700">
                     <h3 className="text-lg font-semibold text-gray-100 mb-4">Data Distribution Summary</h3>
 
@@ -597,13 +628,13 @@ Mike431 1 40 41 3 13.66666667`}
 
                     <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto">
                         <div className="space-y-2 text-sm font-mono text-gray-100">
-                            {distributedData.slice(0, 10).map((client, index) => (
+                            {getAdjustedClientsForOutput().slice(0, 10).map((client, index) => (
                                 <div key={index} className="break-all">
                                     编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 : {client.businessPerson} 年龄 : {client.age} 公司:{client.company} 语言:{client.language} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
                                 </div>
                             ))}
-                            {distributedData.length > 10 && (
-                                <div className="text-gray-400 italic">... and {distributedData.length - 10} more entries</div>
+                            {getAdjustedClientsForOutput().length > 10 && (
+                                <div className="text-gray-400 italic">... and {getAdjustedClientsForOutput().length - 10} more entries</div>
                             )}
                         </div>
                     </div>
