@@ -244,7 +244,8 @@ export default function TeamDataDistributor() {
         let tableText = ""
 
         processedTeamData.forEach(member => {
-            const dataSum = member.newClients > 0 ? member.currentData : "" // Empty if no new data assigned
+            // Always show currentData, which is initialData + newClients
+            const dataSum = member.currentData;
             tableText += `${member.name}\t${dataSum}\n`
         })
 
@@ -262,7 +263,7 @@ export default function TeamDataDistributor() {
         let dataText = ""
         distributedData.forEach(client => {
             // Put data in one field and team member name in the next field (tab-separated)
-            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
+            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} کمپنی:${client.company} زبان:${client.language}`
             dataText += `${clientInfo}\t${client.assignedTo}\n`
         })
 
@@ -290,7 +291,7 @@ export default function TeamDataDistributor() {
         const messageText = clientsForMember
             .map(
                 (client) =>
-                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
+                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} عمر : ${client.age} کمپنی:${client.company} زبان:${client.language}`
             )
             .join("\n");
 
@@ -360,8 +361,8 @@ Mike431 1 40 41 3 13.66666667`}
                         <textarea
                             value={clientData}
                             onChange={(e) => setClientData(e.target.value)}
-                            placeholder={`编号:301 WhatsApp +19252166220 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
-编号:302 WhatsApp +18164908827 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
+                            placeholder={`编号:301 WhatsApp +19252166220 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ کمپنی:Swagbucks زبان:English
+编号:302 WhatsApp +18164908827 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ کمپنی:Swagbucks زبان:English
 ...`}
                             className="w-full h-60 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 text-sm font-mono text-gray-100 placeholder-gray-400"
                         />
@@ -489,17 +490,19 @@ Mike431 1 40 41 3 13.66666667`}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Team Master</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Data</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">New Assigned</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Average</th> {/* New column for average */}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-gray-800 divide-y divide-gray-700">
                                 {processedTeamData.map((member, index) => {
                                     const isSent = sentMembers.has(member.name);
+                                    const averageColorClass = member.averageValue >= averageThreshold ? "text-red-400" : "text-green-400";
                                     return (
                                         <tr key={index} className="hover:bg-gray-700">
                                             <td className="px-4 py-3 text-sm font-medium text-gray-100">{member.name}</td>
                                             <td className="px-4 py-3 text-sm text-gray-100">
-                                                {member.newClients > 0 ? member.currentData : ""}
+                                                {member.currentData} {/* Always display currentData */}
                                             </td>
                                             <td className="px-4 py-3 text-sm text-green-400 font-bold">
                                                 <input
@@ -509,6 +512,9 @@ Mike431 1 40 41 3 13.66666667`}
                                                     className="w-16 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:ring-orange-500 focus:border-orange-500"
                                                     min="0"
                                                 />
+                                            </td>
+                                            <td className={`px-4 py-3 text-sm font-bold ${averageColorClass}`}>
+                                                {member.averageValue === Infinity ? '#DIV/0!' : member.averageValue.toFixed(2)}
                                             </td>
                                             <td className="px-4 py-3 text-sm">
                                                 {member.newClients > 0 && telegramNumbers[member.name] ? (
@@ -566,7 +572,7 @@ Mike431 1 40 41 3 13.66666667`}
                         <div className="space-y-2 text-sm font-mono text-gray-100">
                             {distributedData.slice(0, 10).map((client, index) => (
                                 <div key={index} className="break-all">
-                                    编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 : {client.businessPerson} 年龄 : {client.age} 公司:{client.company} 语言:{client.language} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
+                                    编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 : {client.businessPerson} عمر : {client.age} کمپنی:{client.company} زبان:{client.language} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
                                 </div>
                             ))}
                             {distributedData.length > 10 && (
