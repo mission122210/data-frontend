@@ -107,7 +107,7 @@ anniecorbin86@gmail.com`,
 
         setIsSending(true)
         try {
-            const response = await fetch("https://data-backend-iota.vercel.app/send-email", {
+            const response = await fetch("http://localhost:5000/send-email", {
                 method: "POST",
                 body: formData,
             })
@@ -300,6 +300,9 @@ Generated on: ${new Date().toLocaleString()}
                                 <span className="ml-2 text-gray-400">({(pdfFile.size / 1024 / 1024).toFixed(2)} MB)</span>
                             </div>
                         )}
+                        <div className="mt-1 text-xs text-gray-400">
+                            This attachment is optional, especially for custom emails.
+                        </div>
                     </div>
 
                     {/* Email Body */}
