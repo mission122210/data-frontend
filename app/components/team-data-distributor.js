@@ -13,6 +13,8 @@ export default function TeamDataDistributor() {
     const [distributedData, setDistributedData] = useState([])
     const [isProcessing, setIsProcessing] = useState(false)
     const [sentMembers, setSentMembers] = useState(new Set()); // New state to track sent members
+    const [totalClientsDistributed, setTotalClientsDistributed] = useState(0); // Total clients initially distributed
+    const [availableClientsForManualDistribution, setAvailableClientsForManualDistribution] = useState(0); // Clients freed up by manual reduction
 
     // Telegram numbers mapping (stored as provided by user, including spaces and +)
     const telegramNumbers = {
@@ -39,28 +41,41 @@ export default function TeamDataDistributor() {
 
         lines.forEach((line) => {
             const parts = line.trim().split(/\s+/)
-            if (parts.length === 0) return
+            if (parts.length < 2) return // Ensure at least name and one value
 
             let name = parts[0]
             let initialData = 0
+            let averageValue = Infinity; // Default to Infinity for #DIV/0! or missing
 
             // Check if there's an ID number after the name (e.g., Alpha 411)
             if (parts.length > 1 && !isNaN(parts[1]) && parts[1].length > 2) {
                 // If it's a number that looks like an ID, combine with name
                 name = `${parts[0]} ${parts[1]}`
+                // If there are more parts, try to parse initialData and averageValue
                 if (parts.length > 2 && !isNaN(parts[2])) {
                     initialData = parseInt(parts[2])
                 }
-            } else if (parts.length > 1 && !isNaN(parts[1])) {
-                // If no ID, but a number is present (e.g., Pikki 4)
-                initialData = parseInt(parts[1])
+                if (parts.length > 6) { // Assuming 6th part is the average
+                    const avgStr = parts[6];
+                    averageValue = avgStr === "#DIV/0!" ? Infinity : parseFloat(avgStr);
+                }
+            } else {
+                // Old format or simpler input: Name Value
+                if (parts.length > 1 && !isNaN(parts[1])) {
+                    initialData = parseInt(parts[1])
+                }
+                if (parts.length > 5) { // Assuming 5th part is the average for simpler input
+                    const avgStr = parts[5];
+                    averageValue = avgStr === "#DIV/0!" ? Infinity : parseFloat(avgStr);
+                }
             }
 
             teamMembers.push({
                 name,
                 initialData, // This is the 'DD' or initial count
                 currentData: initialData, // This will be updated
-                newClients: 0
+                newClients: 0,
+                averageValue: averageValue // Store the parsed average value
             })
         })
 
@@ -111,7 +126,7 @@ export default function TeamDataDistributor() {
             // Filter based on distribution mode
             if (distributionMode === "average") {
                 // For simplified input, "average" now refers to the initialData value
-                eligibleMembers = teamMembers.filter(member => member.initialData < averageThreshold)
+                eligibleMembers = teamMembers.filter(member => member.averageValue < averageThreshold)
             }
 
             if (eligibleMembers.length === 0) {
@@ -176,6 +191,8 @@ export default function TeamDataDistributor() {
             setProcessedTeamData(updatedTeamData)
             setDistributedData(distributedClients)
             setSentMembers(new Set()); // Reset sent status on new distribution
+            setTotalClientsDistributed(clients.length); // Set total clients
+            setAvailableClientsForManualDistribution(0); // Initially, all are assigned
 
         } catch (error) {
             alert("Error processing data. Please check the format.")
@@ -183,6 +200,40 @@ export default function TeamDataDistributor() {
 
         setIsProcessing(false)
     }
+
+    const handleManualNewClientsChange = (memberName, newValue) => {
+        setProcessedTeamData(prevData => {
+            const oldTotalAssigned = prevData.reduce((sum, m) => sum + m.newClients, 0);
+            const updatedData = prevData.map(m => {
+                if (m.name === memberName) {
+                    const oldNewClients = m.newClients;
+                    const newNewClients = parseInt(newValue) || 0;
+                    const change = newNewClients - oldNewClients;
+
+                    // Calculate potential new total assigned
+                    const potentialTotalAssigned = oldTotalAssigned + change;
+
+                    // Validate against totalClientsDistributed
+                    if (potentialTotalAssigned > totalClientsDistributed) {
+                        alert(`Cannot assign more than total distributed clients (${totalClientsDistributed}).`);
+                        return m; // Revert to old value
+                    }
+                    if (newNewClients < 0) {
+                        alert("Cannot assign negative clients.");
+                        return m; // Revert to old value
+                    }
+
+                    // Update available clients for manual distribution
+                    setAvailableClientsForManualDistribution(prevAvailable => prevAvailable - change);
+
+                    return { ...m, newClients: newNewClients, currentData: m.initialData + newNewClients };
+                }
+                return m;
+            });
+            return updatedData;
+        });
+    };
+
 
     const copyTeamTable = () => {
         if (processedTeamData.length === 0) {
@@ -261,6 +312,8 @@ export default function TeamDataDistributor() {
         setProcessedTeamData([])
         setDistributedData([])
         setSentMembers(new Set()); // Reset sent status
+        setTotalClientsDistributed(0);
+        setAvailableClientsForManualDistribution(0);
     }
 
     return (
@@ -280,20 +333,19 @@ export default function TeamDataDistributor() {
                         <textarea
                             value={teamDataInput}
                             onChange={(e) => setTeamDataInput(e.target.value)}
-                            placeholder={`Master122
-Alpha 411 4
-Adam 4
-Flash 103 4
-Hadi 108 4
-Lucky 454 4
-Sardar 428 4
-Glock 425 4
-Zubair 410 4
-Jerry 439 4
-Pikki 4
-Peeko 4
-Jutt 420 2
-Mike 431`}
+                            placeholder={`Alpha411 2 58 60 3 20
+Adam 2 55 57 2 28.5
+Flash103 2 55 57 4 14.25
+Hadi108 2 50 52 #DIV/0!
+Lucky454 2 54 56 1 56
+Sardar428 2 55 57 1 57
+Glock425 2 51 53 #DIV/0!
+Zubair410 1 51 52 3 17.33333333
+Jerry439 1 65 66 4 16.5
+Pikki 1 45 46 2 23
+Peeko 1 41 42 2 21
+Jutt420 1 41 42 1 42
+Mike431 1 40 41 3 13.66666667`}
                             className="w-full h-60 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 text-sm font-mono text-gray-100 placeholder-gray-400"
                         />
                         <p className="text-xs text-gray-400 mt-1">
@@ -372,7 +424,7 @@ Mike 431`}
                                 className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-600 bg-gray-700"
                             />
                             <label htmlFor="average" className="ml-3 text-sm text-gray-300">
-                                Only assign to members whose current data is below:
+                                Only assign to members whose average is below:
                             </label>
                             <input
                                 type="number"
@@ -424,6 +476,11 @@ Mike 431`}
             {processedTeamData.length > 0 && (
                 <div className="p-6 border-b border-gray-700">
                     <h3 className="text-lg font-semibold text-gray-100 mb-4">Updated Team Data</h3>
+                    <div className="text-sm text-gray-400 mb-4">
+                        💡 You can manually adjust "New Assigned" values. Note: This does not re-shuffle specific clients in "Distributed Data Preview".
+                        <br />
+                        <span className="font-bold text-blue-400">Available for Manual Distribution: {availableClientsForManualDistribution} pieces</span>
+                    </div>
 
                     <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-700">
@@ -444,7 +501,15 @@ Mike 431`}
                                             <td className="px-4 py-3 text-sm text-gray-100">
                                                 {member.newClients > 0 ? member.currentData : ""}
                                             </td>
-                                            <td className="px-4 py-3 text-sm text-green-400 font-bold">+{member.newClients}</td>
+                                            <td className="px-4 py-3 text-sm text-green-400 font-bold">
+                                                <input
+                                                    type="number"
+                                                    value={member.newClients}
+                                                    onChange={(e) => handleManualNewClientsChange(member.name, e.target.value)}
+                                                    className="w-16 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-gray-100 text-sm focus:ring-orange-500 focus:border-orange-500"
+                                                    min="0"
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 text-sm">
                                                 {member.newClients > 0 && telegramNumbers[member.name] ? (
                                                     <button
@@ -530,7 +595,7 @@ Mike 431`}
                     <ul className="text-xs text-blue-200 space-y-1">
                         <li>• <strong>Equal:</strong> Distributes data evenly among all team members</li>
                         <li>• <strong>Minimum:</strong> Ensures each member gets at least X entries, then distributes remaining equally</li>
-                        <li>• <strong>Average-based:</strong> Only assigns to members whose *current data* (from input) is below the threshold</li>
+                        <li>• <strong>Average-based:</strong> Only assigns to members whose *average* (from input) is below the threshold</li>
                     </ul>
                 </div>
             </div>
