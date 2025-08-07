@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Send } from 'lucide-react' // Import the Send icon
 
 export default function TeamDataDistributor() {
     const [teamDataInput, setTeamDataInput] = useState("") // New simplified input for team data
@@ -11,6 +12,25 @@ export default function TeamDataDistributor() {
     const [processedTeamData, setProcessedTeamData] = useState([]) // Stores { name, initialData, currentData, newClients }
     const [distributedData, setDistributedData] = useState([])
     const [isProcessing, setIsProcessing] = useState(false)
+    const [sentMembers, setSentMembers] = useState(new Set()); // New state to track sent members
+
+    // Telegram numbers mapping (stored as provided by user, including spaces and +)
+    const telegramNumbers = {
+        "Alpha411": "+855 71 445 4362",
+        "Adam": "+1 754 248 5995",
+        "Flash103": "+263 78 512 3171",
+        "Hadi108": "+923017029487",
+        "Lucky454": "+1 267 344 7066",
+        "Sardar428": "+1 206 334 7270",
+        "Glock425": "+1 332 265 8872",
+        "Zubair410": "+1 646 842 9903",
+        "Jerry439": "+1 929 584 7375",
+        "Pikki": "+1 206 396 8715",
+        "Peeko": "+1 917 436 7632",
+        "Jutt420": "+1 213 682 8318",
+        "Mike431": "+1 628 309 8128",
+        "Master122": "+1 816 217 8661",
+    };
 
     // Parses the simplified team data input: "Name [ID] Value" or "Name [ID]"
     const parseTeamData = (rawData) => {
@@ -154,6 +174,7 @@ export default function TeamDataDistributor() {
 
             setProcessedTeamData(updatedTeamData)
             setDistributedData(distributedClients)
+            setSentMembers(new Set()); // Reset sent status on new distribution
 
         } catch (error) {
             alert("Error processing data. Please check the format.")
@@ -198,11 +219,47 @@ export default function TeamDataDistributor() {
         })
     }
 
+    const handleSendToTelegram = (memberName) => {
+        const rawPhoneNumber = telegramNumbers[memberName];
+        if (!rawPhoneNumber) {
+            alert(`Telegram number not found for ${memberName}. Please add it to the tool's configuration.`);
+            return;
+        }
+
+        const clientsForMember = distributedData.filter(
+            (client) => client.assignedTo === memberName
+        );
+
+        if (clientsForMember.length === 0) {
+            alert(`No clients assigned to ${memberName} to send.`);
+            return;
+        }
+
+        const messageText = clientsForMember
+            .map(
+                (client) =>
+                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
+            )
+            .join("\n");
+
+        const encodedMessage = encodeURIComponent(messageText);
+
+        // Clean phone number for t.me (remove spaces, keep +)
+        const cleanPhoneForWeb = rawPhoneNumber.replace(/\s/g, '');
+
+        // Use the t.me link directly, as it's more universally supported and handles app redirection
+        window.open(`https://t.me/${cleanPhoneForWeb}?text=${encodedMessage}`, '_blank');
+
+        // Mark as sent
+        setSentMembers(prev => new Set(prev).add(memberName));
+    };
+
     const clearAll = () => {
         setTeamDataInput("")
         setClientData("")
         setProcessedTeamData([])
         setDistributedData([])
+        setSentMembers(new Set()); // Reset sent status
     }
 
     return (
@@ -374,18 +431,44 @@ Mike 431`}
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Team Master</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Total Data</th>
                                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">New Assigned</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                {processedTeamData.map((member, index) => (
-                                    <tr key={index} className="hover:bg-gray-700">
-                                        <td className="px-4 py-3 text-sm font-medium text-gray-100">{member.name}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-100">
-                                            {member.newClients > 0 ? member.currentData : ""}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-green-400 font-bold">+{member.newClients}</td>
-                                    </tr>
-                                ))}
+                                {processedTeamData.map((member, index) => {
+                                    const isSent = sentMembers.has(member.name);
+                                    return (
+                                        <tr key={index} className="hover:bg-gray-700">
+                                            <td className="px-4 py-3 text-sm font-medium text-gray-100">{member.name}</td>
+                                            <td className="px-4 py-3 text-sm text-gray-100">
+                                                {member.newClients > 0 ? member.currentData : ""}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-green-400 font-bold">+{member.newClients}</td>
+                                            <td className="px-4 py-3 text-sm">
+                                                {member.newClients > 0 && telegramNumbers[member.name] ? (
+                                                    <button
+                                                        onClick={() => handleSendToTelegram(member.name)}
+                                                        disabled={isSent} // Disable if already sent
+                                                        className={`px-3 py-1 rounded-md text-xs flex items-center ${isSent
+                                                                ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                                                                : "bg-blue-500 text-white hover:bg-blue-600"
+                                                            }`}
+                                                    >
+                                                        {isSent ? (
+                                                            <>✅ Sent</>
+                                                        ) : (
+                                                            <>
+                                                                <Send className="w-3 h-3 mr-1" /> Send to Telegram
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                ) : (
+                                                    member.newClients > 0 && <span className="text-red-400 text-xs">No Telegram #</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -438,6 +521,7 @@ Mike 431`}
                     <li>4. Click "Distribute Data" to process</li>
                     <li>5. Use "Copy Team Table" to copy updated table for Excel (Name in one column, Total Data in next)</li>
                     <li>6. Use "Copy Distributed Data" to copy client assignments (Client Info in one column, Team Member in next)</li>
+                    <li>7. Click "Send to Telegram" next to a team member to send their assigned data directly.</li>
                 </ul>
 
                 <div className="mt-4 p-3 bg-blue-900 rounded-lg">
