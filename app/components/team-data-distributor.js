@@ -9,15 +9,11 @@ export default function TeamDataDistributor() {
     const [minDataPerMember, setMinDataPerMember] = useState(4)
     const [averageThreshold, setAverageThreshold] = useState(30) // Now refers to the single data point
     const [processedTeamData, setProcessedTeamData] = useState([]) // Stores { name, initialData, currentData, newClients }
-    const [distributedData, setDistributedData] = useState([]) // Stores the *original* distribution of clients
+    const [distributedData, setDistributedData] = useState([]) // Stores the *original* distribution of phone numbers
     const [isProcessing, setIsProcessing] = useState(false)
     const [sentMembers, setSentMembers] = useState(new Set()) // New state to track sent members
     const [totalClientsDistributed, setTotalClientsDistributed] = useState(0) // Total clients initially distributed
     const [availableClientsForManualDistribution, setAvailableClientsForManualDistribution] = useState(0) // Clients freed up by manual reduction
-
-    const [rawDataInput, setRawDataInput] = useState("") // Input for any format data
-    const [convertedData, setConvertedData] = useState("") // Output converted to standard format
-    const [isConverting, setIsConverting] = useState(false)
 
     // Telegram numbers mapping (stored as provided by user, including spaces and +)
     const telegramNumbers = {
@@ -108,46 +104,32 @@ export default function TeamDataDistributor() {
     }
 
     const parseClientData = (rawData) => {
-        const clients = []
+        const lines = rawData.trim().split("\n")
+        const dataElements = []
 
-        // First, try to split by "编号:" to handle continuous format
-        const entries = rawData.split(/(?=编号:)/).filter((entry) => entry.trim().length > 0)
-
-        entries.forEach((entry) => {
-            // Clean up the entry and remove any leading/trailing whitespace
-            const cleanEntry = entry.trim()
-
-            // Updated regex to be more flexible with spaces between fields
-            // Changed WhatsApp regex to include '/'
-            const match = cleanEntry.match(
-                /编号:(\d+)\s+WhatsApp\s+([+\d\s/]+)\s+推手名字\s*:\s*([^业]+)\s*业务员\s*:\s*([^年]+)\s*年龄\s*:\s*([^公]+)\s*公司:([^语]+)\s*语言:(.+)$/,
-            )
-
-            if (match) {
-                clients.push({
-                    id: match[1].trim(),
-                    whatsapp: match[2].trim(),
-                    referrer: match[3].trim(),
-                    businessPerson: match[4].trim(),
-                    age: match[5].trim(),
-                    company: match[6].trim(),
-                    language: match[7].trim(),
+        lines.forEach((line, index) => {
+            const trimmedLine = line.trim()
+            if (trimmedLine) {
+                // Only include non-empty lines
+                dataElements.push({
+                    id: index + 1,
+                    content: trimmedLine,
                     assignedTo: null,
                 })
             }
         })
 
-        return clients
+        return dataElements
     }
 
     const distributeData = () => {
         setIsProcessing(true)
         try {
             const teamMembers = parseTeamData(teamDataInput)
-            const clients = parseClientData(clientData)
+            const phoneNumbers = parseClientData(clientData)
 
-            if (teamMembers.length === 0 || clients.length === 0) {
-                alert("Please provide valid team and client data")
+            if (teamMembers.length === 0 || phoneNumbers.length === 0) {
+                alert("Please provide valid team and phone number data")
                 setIsProcessing(false)
                 return
             }
@@ -166,16 +148,16 @@ export default function TeamDataDistributor() {
                 return
             }
 
-            // Distribute clients
-            const distributedClientsCopy = [...clients] // Use a copy for distribution
+            // Distribute phone numbers
+            const distributedPhonesCopy = [...phoneNumbers] // Use a copy for distribution
             let memberIndex = 0
 
             if (distributionMode === "minimum") {
                 // Ensure minimum data per member first
                 eligibleMembers.forEach((member) => {
-                    for (let i = 0; i < minDataPerMember && memberIndex < distributedClientsCopy.length; i++) {
-                        if (!distributedClientsCopy[memberIndex].assignedTo) {
-                            distributedClientsCopy[memberIndex].assignedTo = member.name
+                    for (let i = 0; i < minDataPerMember && memberIndex < distributedPhonesCopy.length; i++) {
+                        if (!distributedPhonesCopy[memberIndex].assignedTo) {
+                            distributedPhonesCopy[memberIndex].assignedTo = member.name
                             member.newClients++
                             memberIndex++
                         }
@@ -184,22 +166,22 @@ export default function TeamDataDistributor() {
 
                 // Distribute remaining data equally
                 let currentMemberIndex = 0
-                for (let i = memberIndex; i < distributedClientsCopy.length; i++) {
-                    distributedClientsCopy[i].assignedTo = eligibleMembers[currentMemberIndex].name
+                for (let i = memberIndex; i < distributedPhonesCopy.length; i++) {
+                    distributedPhonesCopy[i].assignedTo = eligibleMembers[currentMemberIndex].name
                     eligibleMembers[currentMemberIndex].newClients++
                     currentMemberIndex = (currentMemberIndex + 1) % eligibleMembers.length
                 }
             } else {
                 // Equal distribution
-                distributedClientsCopy.forEach((client, index) => {
+                distributedPhonesCopy.forEach((phone, index) => {
                     const memberIdx = index % eligibleMembers.length
-                    client.assignedTo = eligibleMembers[memberIdx].name
+                    phone.assignedTo = eligibleMembers[memberIdx].name
                     eligibleMembers[memberIdx].newClients++
                 })
             }
 
-            // Sort distributed clients by assigned team member name
-            distributedClientsCopy.sort((a, b) => {
+            // Sort distributed phone numbers by assigned team member name
+            distributedPhonesCopy.sort((a, b) => {
                 if (a.assignedTo === null && b.assignedTo === null) return 0
                 if (a.assignedTo === null) return 1
                 if (b.assignedTo === null) return -1
@@ -223,9 +205,9 @@ export default function TeamDataDistributor() {
             })
 
             setProcessedTeamData(updatedTeamData)
-            setDistributedData(distributedClientsCopy) // Store the full, original distribution
+            setDistributedData(distributedPhonesCopy) // Store the full, original distribution
             setSentMembers(new Set()) // Reset sent status on new distribution
-            setTotalClientsDistributed(clients.length) // Set total clients
+            setTotalClientsDistributed(phoneNumbers.length) // Set total clients
             setAvailableClientsForManualDistribution(0) // Initially, all are assigned
         } catch (error) {
             alert("Error processing data. Please check the format.")
@@ -297,11 +279,10 @@ export default function TeamDataDistributor() {
         })
     }
 
-    // Helper function to get clients based on current processedTeamData counts
     const getAdjustedClientsForOutput = () => {
-        const allClients = parseClientData(clientData) // Parse raw client data
-        const clientsForOutput = []
-        let clientCursor = 0
+        const allPhones = parseClientData(clientData) // Parse raw phone data
+        const phonesForOutput = []
+        let phoneCursor = 0
 
         // Sort processedTeamData by name to ensure consistent output order
         const sortedProcessedTeamData = [...processedTeamData].sort((a, b) => a.name.localeCompare(b.name))
@@ -309,20 +290,20 @@ export default function TeamDataDistributor() {
         sortedProcessedTeamData.forEach((member) => {
             const targetCount = member.newClients
             for (let i = 0; i < targetCount; i++) {
-                if (clientCursor < allClients.length) {
-                    clientsForOutput.push({
-                        ...allClients[clientCursor],
+                if (phoneCursor < allPhones.length) {
+                    phonesForOutput.push({
+                        ...allPhones[phoneCursor],
                         assignedTo: member.name, // Assign to the current member
                     })
-                    clientCursor++
+                    phoneCursor++
                 } else {
-                    // No more clients in the original list to assign
+                    // No more phone numbers in the original list to assign
                     break
                 }
             }
         })
 
-        return clientsForOutput
+        return phonesForOutput
     }
 
     const copyDistributedData = () => {
@@ -330,15 +311,11 @@ export default function TeamDataDistributor() {
             alert("No processed data to copy")
             return
         }
-
         let dataText = ""
-        const clientsToCopy = getAdjustedClientsForOutput() // Get the adjusted list
-
+        const clientsToCopy = getAdjustedClientsForOutput()
         clientsToCopy.forEach((client) => {
-            const clientInfo = `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`
-            dataText += `${clientInfo}\t${client.assignedTo}\n`
+            dataText += `${client.content}\t${client.assignedTo}\n`
         })
-
         navigator.clipboard.writeText(dataText.trim()).then(() => {
             alert("Distributed data copied to clipboard! Data will be in one column, team member names in the next column.")
         })
@@ -350,29 +327,16 @@ export default function TeamDataDistributor() {
             alert(`Telegram number not found for ${memberName}. Please add it to the tool's configuration.`)
             return
         }
-
-        const allAdjustedClients = getAdjustedClientsForOutput() // Get the adjusted list
+        const allAdjustedClients = getAdjustedClientsForOutput()
         const clientsForMember = allAdjustedClients.filter((client) => client.assignedTo === memberName)
-
         if (clientsForMember.length === 0) {
             alert(`No clients assigned to ${memberName} to send.`)
             return
         }
-
-        const messageText = clientsForMember
-            .map(
-                (client) =>
-                    `编号:${client.id} WhatsApp ${client.whatsapp} 推手名字 : ${client.referrer} 业务员 : ${client.businessPerson} 年龄 : ${client.age} 公司:${client.company} 语言:${client.language}`,
-            )
-            .join("\n")
-
+        const messageText = clientsForMember.map((client) => client.content).join("\n")
         const encodedMessage = encodeURIComponent(messageText)
-        // Clean phone number for t.me (remove spaces, keep +)
         const cleanPhoneForWeb = rawPhoneNumber.replace(/\s/g, "")
-        // Use the t.me link directly, as it's more universally supported and handles app redirection
         window.open(`https://t.me/${cleanPhoneForWeb}?text=${encodedMessage}`, "_blank")
-
-        // Mark as sent
         setSentMembers((prev) => new Set(prev).add(memberName))
     }
 
@@ -384,105 +348,6 @@ export default function TeamDataDistributor() {
         setSentMembers(new Set()) // Reset sent status
         setTotalClientsDistributed(0)
         setAvailableClientsForManualDistribution(0)
-        setRawDataInput("") // Clear raw data input
-        setConvertedData("") // Clear converted data output
-    }
-
-    const convertDataToStandardFormat = () => {
-        setIsConverting(true)
-        try {
-            const lines = rawDataInput
-                .trim()
-                .split(/(?=编号:)/)
-                .filter((line) => line.trim())
-            const convertedEntries = []
-
-            lines.forEach((line) => {
-                const trimmedLine = line.trim()
-                if (!trimmedLine) return
-
-                // Extract ID number
-                const idMatch = trimmedLine.match(/编号:(\d+)/)
-                if (!idMatch) return
-                const id = idMatch[1]
-
-                const whatsappMatch = trimmedLine.match(
-                    /WhatsApp\s*:?\s*([+\d\s/]+?)(?:\s+推|$|\s+招|\s+年|\s+业|\s+公|\s+语|\s+言)/,
-                )
-                const whatsapp = whatsappMatch ? whatsappMatch[1].trim() : ""
-
-                // Try to extract different field patterns
-                let referrer = "Unknown"
-                let businessPerson = "Unknown"
-                let age = "Unknown"
-                let company = "Unknown"
-                let language = "Unknown"
-
-                // Pattern 1: Handle various formats of 推手名字/推手名 : Name 业务员 : Person etc.
-                const referrerMatch = trimmedLine.match(/推手名[字]?\s*:?\s*([^业]+?)(?:\s+业务员|\s+年龄|$)/)
-                if (referrerMatch) {
-                    referrer = referrerMatch[1].trim()
-                }
-
-                const businessMatch = trimmedLine.match(/业务员\s*:?\s*([^年]+?)(?:\s+年龄|\s+公司|$)/)
-                if (businessMatch) {
-                    businessPerson = businessMatch[1].trim()
-                }
-
-                const ageMatch = trimmedLine.match(/年龄\s*:?\s*([^公]+?)(?:\s+公司|$)/)
-                if (ageMatch) {
-                    age = ageMatch[1].trim()
-                }
-
-                const companyMatch = trimmedLine.match(/公司\s*:?\s*([^语言]+?)(?:\s+语言|\s+言|$)/)
-                if (companyMatch) {
-                    company = companyMatch[1].trim()
-                }
-
-                const languageMatch = trimmedLine.match(/(?:语言|言)\s*:?\s*(.+?)$/)
-                if (languageMatch) {
-                    language = languageMatch[1].trim()
-                }
-
-                // Pattern 2: Handle recruitment format (招聘人：Name 招聘公司：Company)
-                const pattern2Match = trimmedLine.match(/招聘人[：:]\s*([^招]+)\s*招聘公司[：:]\s*(.+)$/)
-                if (pattern2Match) {
-                    referrer = pattern2Match[1].trim()
-                    company = pattern2Match[2].trim()
-                    businessPerson = referrer // Use referrer as business person for this format
-                    age = "25+" // Default age
-                    language = "English" // Default language
-                }
-
-                // Create standardized format
-                const standardEntry = `编号:${id} WhatsApp ${whatsapp} 推手名字 : ${referrer} 业务员 : ${businessPerson} 年龄 : ${age} 公司:${company} 语言:${language}`
-                convertedEntries.push(standardEntry)
-            })
-
-            setConvertedData(convertedEntries.join("\n\n"))
-        } catch (error) {
-            alert("Error converting data. Please check the format.")
-        }
-        setIsConverting(false)
-    }
-
-    const copyConvertedData = () => {
-        if (!convertedData) {
-            alert("No converted data to copy")
-            return
-        }
-        navigator.clipboard.writeText(convertedData).then(() => {
-            alert("Converted data copied to clipboard!")
-        })
-    }
-
-    const useConvertedData = () => {
-        if (!convertedData) {
-            alert("No converted data to use")
-            return
-        }
-        setClientData(convertedData)
-        alert("Converted data has been loaded into the Client Data field!")
     }
 
     return (
@@ -490,70 +355,7 @@ export default function TeamDataDistributor() {
             {/* Header */}
             <div className="bg-orange-600 px-6 py-4">
                 <h2 className="text-2xl font-bold text-white">Team Data Distribution Tool</h2>
-                <p className="text-orange-100 mt-1">Distribute client data among team members based on performance</p>
-            </div>
-
-            <div className="p-6 border-b border-gray-700 bg-gray-750">
-                <h3 className="text-lg font-semibold text-gray-100 mb-4">Data Conversion</h3>
-                <p className="text-sm text-gray-300 mb-4">
-                    Convert any data format to the standard format required by this tool. Supports multiple input formats
-                    including recruitment data.
-                </p>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Raw Data Input */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Raw Data Input (Any Format)</label>
-                        <textarea
-                            value={rawDataInput}
-                            onChange={(e) => setRawDataInput(e.target.value)}
-                            placeholder={`编号:603 WhatsApp +19728356651 招聘人：Mila 招聘公司：Indeed
-编号:604 WhatsApp +17632132114 招聘人：Mila 招聘公司：Indeed
-编号:605 WhatsApp +15094809571 招聘人：Mila 招聘公司：Indeed
-
-OR
-
-编号:431 WhatsApp +12159003419 推手名字 : Angelina 业务员 : jinshan00001年龄 : 25+ 公司:Swagbucks 语言:English`}
-                            className="w-full h-40 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 text-sm font-mono text-gray-100 placeholder-gray-400"
-                        />
-                    </div>
-
-                    {/* Converted Data Output */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Converted Standard Format</label>
-                        <textarea
-                            value={convertedData}
-                            readOnly
-                            placeholder="Converted data will appear here..."
-                            className="w-full h-40 px-3 py-2 bg-gray-600 border border-gray-500 rounded-md shadow-sm text-sm font-mono text-gray-100 placeholder-gray-400"
-                        />
-                    </div>
-                </div>
-
-                {/* Conversion Action Buttons */}
-                <div className="flex flex-wrap gap-3 mt-4">
-                    <button
-                        onClick={convertDataToStandardFormat}
-                        disabled={!rawDataInput || isConverting}
-                        className="px-6 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                    >
-                        {isConverting ? "Converting..." : "🔄 Convert Data"}
-                    </button>
-                    <button
-                        onClick={copyConvertedData}
-                        disabled={!convertedData}
-                        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                    >
-                        📋 Copy Converted Data
-                    </button>
-                    <button
-                        onClick={useConvertedData}
-                        disabled={!convertedData}
-                        className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
-                    >
-                        ⬇️ Use in Distribution
-                    </button>
-                </div>
+                <p className="text-orange-100 mt-1">Distribute phone numbers among team members based on performance</p>
             </div>
 
             {/* Input Section */}
@@ -586,20 +388,26 @@ Mike431 1 40 41 3 13.66666667`}
                         </p>
                     </div>
 
-                    {/* Client Data Input */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">Client Data to Distribute</label>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Phone Numbers to Distribute (Any Format)
+                        </label>
                         <textarea
                             value={clientData}
                             onChange={(e) => setClientData(e.target.value)}
-                            placeholder={`编号:301 WhatsApp +19252166220 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
-编号:302 WhatsApp +18164908827 推手名字 : Jack Suengel 业务员 : fw720 年龄 : 25+ 公司:Swagbucks 语言:English
-...`}
+                            placeholder={`编号:282 WhatsApp: +17862029406 推手名字 : Emily 业务员 : Ayan 年龄: 25+ 公司: Indeed 语言:English
+编号:283 WhatsApp: +14805197715 推手名字 : Emily 业务员 : Ayan 年龄: 25+ 公司: Indeed 语言:English
+编号32： 19492283183 MARLENE LUNA CASTAÑEDA
+
+OR just phone numbers:
++17862029406
++14805197715
+19492283183`}
                             className="w-full h-60 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md shadow-sm focus:ring-orange-500 focus:border-orange-500 text-sm font-mono text-gray-100 placeholder-gray-400"
                         />
                         <p className="text-xs text-gray-400 mt-1">
-                            <span className="text-green-400 font-semibold">✅ Now supports both formats:</span> Line-separated entries
-                            OR continuous text without line breaks
+                            Paste any format containing phone numbers. The tool will automatically extract all phone numbers and count
+                            each as one data piece.
                         </p>
                     </div>
                 </div>
@@ -679,27 +487,27 @@ Mike431 1 40 41 3 13.66666667`}
                         disabled={!teamDataInput || !clientData || isProcessing}
                         className="px-6 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
                     >
-                        {isProcessing ? "Processing..." : "🔄 Distribute Data"}
+                        {isProcessing ? "Processing..." : "Distribute Phone Numbers"}
                     </button>
                     <button
                         onClick={copyTeamTable}
                         disabled={processedTeamData.length === 0}
                         className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
                     >
-                        📋 Copy Team Table
+                        Copy Team Table
                     </button>
                     <button
                         onClick={copyDistributedData}
                         disabled={processedTeamData.length === 0}
                         className="px-6 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
                     >
-                        📋 Copy Distributed Data
+                        Copy Distributed Phone Numbers
                     </button>
                     <button
                         onClick={clearAll}
                         className="px-6 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
                     >
-                        🗑️ Clear All
+                        Clear All
                     </button>
                 </div>
             </div>
@@ -784,10 +592,9 @@ Mike431 1 40 41 3 13.66666667`}
                 </div>
             )}
 
-            {/* Distributed Data Preview */}
             {processedTeamData.length > 0 && (
                 <div className="p-6 border-b border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-100 mb-4">Data Distribution Summary</h3>
+                    <h3 className="text-lg font-semibold text-gray-100 mb-4">Phone Number Distribution Summary</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
                         {processedTeamData
                             .filter((member) => member.newClients > 0)
@@ -795,12 +602,12 @@ Mike431 1 40 41 3 13.66666667`}
                                 <div key={index} className="bg-gray-700 rounded-lg p-4">
                                     <div className="text-sm font-medium text-gray-100">{member.name}</div>
                                     <div className="text-2xl font-bold text-orange-400">{member.newClients}</div>
-                                    <div className="text-xs text-gray-400">new clients assigned</div>
+                                    <div className="text-xs text-gray-400">phone numbers assigned</div>
                                 </div>
                             ))}
                     </div>
                     <div className="text-sm text-gray-400 mb-4">
-                        Showing first 10 distributed entries. Use "Copy Distributed Data" to get all entries.
+                        Showing first 10 distributed phone numbers. Use "Copy Distributed Phone Numbers" to get all entries.
                     </div>
                     <div className="bg-gray-700 rounded-lg p-4 max-h-60 overflow-y-auto">
                         <div className="space-y-2 text-sm font-mono text-gray-100">
@@ -808,14 +615,12 @@ Mike431 1 40 41 3 13.66666667`}
                                 .slice(0, 10)
                                 .map((client, index) => (
                                     <div key={index} className="break-all">
-                                        编号:{client.id} WhatsApp {client.whatsapp} 推手名字 : {client.referrer} 业务员 :{" "}
-                                        {client.businessPerson} 年龄 : {client.age} 公司:{client.company} 语言:{client.language}{" "}
-                                        <span className="text-orange-400 font-bold">{client.assignedTo}</span>
+                                        {client.content} <span className="text-orange-400 font-bold">{client.assignedTo}</span>
                                     </div>
                                 ))}
                             {getAdjustedClientsForOutput().length > 10 && (
                                 <div className="text-gray-400 italic">
-                                    ... and {getAdjustedClientsForOutput().length - 10} more entries
+                                    ... and {getAdjustedClientsForOutput().length - 10} more phone numbers
                                 </div>
                             )}
                         </div>
@@ -828,41 +633,22 @@ Mike431 1 40 41 3 13.66666667`}
                 <h4 className="text-sm font-medium text-gray-100 mb-2">How to use:</h4>
                 <ul className="text-sm text-gray-300 space-y-1">
                     <li>1. Paste your team members and their current data in the left textarea (one per line)</li>
-                    <li>2. Paste your client data to distribute in the right textarea</li>
+                    <li>2. Paste any data containing phone numbers in the right textarea (any format works)</li>
                     <li>3. Select distribution method (Equal, Minimum per member, or Average-based)</li>
-                    <li>4. Click "Distribute Data" to process</li>
+                    <li>4. Click "Distribute Phone Numbers" to process</li>
                     <li>5. Use "Copy Team Table" to copy updated table for Excel (Name in one column, Total Data in next)</li>
                     <li>
-                        6. Use "Copy Distributed Data" to copy client assignments (Client Info in one column, Team Member in next)
+                        6. Use "Copy Distributed Phone Numbers" to copy phone assignments (Phone in one column, Team Member in next)
                     </li>
-                    <li>7. Click "Send to Telegram" next to a team member to send their assigned data directly.</li>
+                    <li>7. Click "Send to Telegram" next to a team member to send their assigned phone numbers directly.</li>
                 </ul>
                 <div className="mt-4 p-3 bg-blue-900 rounded-lg">
-                    <h5 className="text-sm font-medium text-blue-100 mb-1">💡 Distribution Methods:</h5>
+                    <h5 className="text-sm font-medium text-blue-100 mb-1">Phone Number Detection:</h5>
                     <ul className="text-xs text-blue-200 space-y-1">
-                        <li>
-                            • <strong>Equal:</strong> Distributes data evenly among all team members
-                        </li>
-                        <li>
-                            • <strong>Minimum:</strong> Ensures each member gets at least X entries, then distributes remaining
-                            equally
-                        </li>
-                        <li>
-                            • <strong>Average-based:</strong> Only assigns to members whose *average* (from input) is below the
-                            threshold
-                        </li>
-                    </ul>
-                </div>
-                <div className="mt-4 p-3 bg-green-900 rounded-lg">
-                    <h5 className="text-sm font-medium text-green-100 mb-1">✅ Supported Client Data Formats:</h5>
-                    <ul className="text-xs text-green-200 space-y-1">
-                        <li>
-                            • <strong>Line-separated:</strong> Each client entry on a new line (original format)
-                        </li>
-                        <li>
-                            • <strong>Continuous:</strong> All client entries in one line without line breaks (new format)
-                        </li>
-                        <li>• The tool automatically detects and handles both formats!</li>
+                        <li>• The tool automatically extracts all phone numbers from any format</li>
+                        <li>• Each phone number found = 1 data piece for distribution</li>
+                        <li>• Supports international formats with country codes</li>
+                        <li>• No need for specific formatting - just paste your data!</li>
                     </ul>
                 </div>
             </div>
