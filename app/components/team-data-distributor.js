@@ -279,33 +279,6 @@ export default function TeamDataDistributor() {
         })
     }
 
-    const getAdjustedClientsForOutput = () => {
-        const allPhones = parseClientData(clientData) // Parse raw phone data
-        const phonesForOutput = []
-        let phoneCursor = 0
-
-        // Sort processedTeamData by name to ensure consistent output order
-        const sortedProcessedTeamData = [...processedTeamData].sort((a, b) => a.name.localeCompare(b.name))
-
-        sortedProcessedTeamData.forEach((member) => {
-            const targetCount = member.newClients
-            for (let i = 0; i < targetCount; i++) {
-                if (phoneCursor < allPhones.length) {
-                    phonesForOutput.push({
-                        ...allPhones[phoneCursor],
-                        assignedTo: member.name, // Assign to the current member
-                    })
-                    phoneCursor++
-                } else {
-                    // No more phone numbers in the original list to assign
-                    break
-                }
-            }
-        })
-
-        return phonesForOutput
-    }
-
     const copyDistributedData = () => {
         if (processedTeamData.length === 0) {
             alert("No processed data to copy")
@@ -318,6 +291,19 @@ export default function TeamDataDistributor() {
         })
         navigator.clipboard.writeText(dataText.trim()).then(() => {
             alert("Distributed data copied to clipboard! Data will be in one column, team member names in the next column.")
+        })
+    }
+
+    const handleCopyData = (memberName) => {
+        const allAdjustedClients = getAdjustedClientsForOutput()
+        const clientsForMember = allAdjustedClients.filter((client) => client.assignedTo === memberName)
+        if (clientsForMember.length === 0) {
+            alert(`No data assigned to ${memberName} to copy.`)
+            return
+        }
+        const dataText = clientsForMember.map((client) => client.content).join("\n")
+        navigator.clipboard.writeText(dataText).then(() => {
+            alert(`Data for ${memberName} copied to clipboard!`)
         })
     }
 
@@ -348,6 +334,33 @@ export default function TeamDataDistributor() {
         setSentMembers(new Set()) // Reset sent status
         setTotalClientsDistributed(0)
         setAvailableClientsForManualDistribution(0)
+    }
+
+    const getAdjustedClientsForOutput = () => {
+        const allPhones = parseClientData(clientData) // Parse raw phone data
+        const phonesForOutput = []
+        let phoneCursor = 0
+
+        // Sort processedTeamData by name to ensure consistent output order
+        const sortedProcessedTeamData = [...processedTeamData].sort((a, b) => a.name.localeCompare(b.name))
+
+        sortedProcessedTeamData.forEach((member) => {
+            const targetCount = member.newClients
+            for (let i = 0; i < targetCount; i++) {
+                if (phoneCursor < allPhones.length) {
+                    phonesForOutput.push({
+                        ...allPhones[phoneCursor],
+                        assignedTo: member.name, // Assign to the current member
+                    })
+                    phoneCursor++
+                } else {
+                    // No more phone numbers in the original list to assign
+                    break
+                }
+            }
+        })
+
+        return phonesForOutput
     }
 
     return (
@@ -562,26 +575,36 @@ OR just phone numbers:
                                                 />
                                             </td>
                                             <td className="px-4 py-3 text-sm">
-                                                {member.newClients > 0 && telegramNumbers[member.name] ? (
-                                                    <button
-                                                        onClick={() => handleSendToTelegram(member.name)}
-                                                        disabled={isSent} // Disable if already sent
-                                                        className={`px-3 py-1 rounded-md text-xs flex items-center ${isSent
-                                                                ? "bg-gray-600 text-gray-300 cursor-not-allowed"
-                                                                : "bg-blue-500 text-white hover:bg-blue-600"
-                                                            }`}
-                                                    >
-                                                        {isSent ? (
-                                                            <>✅ Sent</>
-                                                        ) : (
-                                                            <>
-                                                                <Send className="w-3 h-3 mr-1" /> Send to Telegram
-                                                            </>
-                                                        )}
-                                                    </button>
-                                                ) : (
-                                                    member.newClients > 0 && <span className="text-red-400 text-xs">No Telegram #</span>
-                                                )}
+                                                <div className="flex gap-2">
+                                                    {member.newClients > 0 && (
+                                                        <button
+                                                            onClick={() => handleCopyData(member.name)}
+                                                            className="px-3 py-1 rounded-md text-xs bg-green-500 text-white hover:bg-green-600"
+                                                        >
+                                                            Copy data
+                                                        </button>
+                                                    )}
+                                                    {member.newClients > 0 && telegramNumbers[member.name] ? (
+                                                        <button
+                                                            onClick={() => handleSendToTelegram(member.name)}
+                                                            disabled={isSent} // Disable if already sent
+                                                            className={`px-3 py-1 rounded-md text-xs flex items-center ${isSent
+                                                                    ? "bg-gray-600 text-gray-300 cursor-not-allowed"
+                                                                    : "bg-blue-500 text-white hover:bg-blue-600"
+                                                                }`}
+                                                        >
+                                                            {isSent ? (
+                                                                <>✅ Sent</>
+                                                            ) : (
+                                                                <>
+                                                                    <Send className="w-3 h-3 mr-1" /> Send to Telegram
+                                                                </>
+                                                            )}
+                                                        </button>
+                                                    ) : (
+                                                        member.newClients > 0 && <span className="text-red-400 text-xs">No Telegram #</span>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     )
