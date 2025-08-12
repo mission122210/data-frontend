@@ -26,47 +26,62 @@ export default function DataMatcher() {
         const lines = rawData.trim().split("\n")
         const parsed = []
 
-        lines.forEach((line) => {
-            // Try new format first
-            let match = line.match(
-                /编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*(\w+)\s+业务员\s*:\s*(\w+)年龄\s*:\s*[\w+]+\s+公司:(\w+)\s+语言:(\w+)(.*)$/,
+        lines.forEach((line, lineIndex) => {
+            // Clean the line first - remove extra whitespace and normalize
+            const cleanLine = line.trim().replace(/\s+/g, " ")
+
+            if (!cleanLine) return // Skip empty lines
+
+            // Try new format first - more flexible regex with optional spaces
+            let match = cleanLine.match(
+                /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*([^业]+?)\s*业务员\s*:\s*([^年]+?)\s*年龄\s*:\s*[^公]+?\s*公司\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)(.*)$/i,
             )
 
             if (match) {
                 const phone = match[2].replace(/\s+/g, "")
+                const referrer = match[3].trim()
+                const businessPerson = match[4].trim()
+                const company = match[5].trim()
+                const language = match[6].trim()
                 const status = hasStatus ? match[7].trim() : ""
 
                 parsed.push({
                     id: match[1],
                     whatsapp: phone,
-                    referrer: match[3],
-                    company: match[5],
-                    language: match[6],
-                    businessPerson: match[4],
+                    referrer: referrer,
+                    company: company,
+                    language: language,
+                    businessPerson: businessPerson,
                     status: status,
                 })
             } else {
-                // Try old format
-                match = line.match(
-                    /编号:(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推荐人：Referrer:\s*(\w+)\s+公司Company Name\s*:(\w+)\s+语言:(\w+)(.*)$/,
+                // Try old format - also more flexible
+                match = cleanLine.match(
+                    /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推荐人[：:]\s*Referrer\s*:\s*([^公]+?)\s*公司\s*Company\s+Name\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)(.*)$/i,
                 )
 
                 if (match) {
                     const phone = match[2].replace(/\s+/g, "")
+                    const referrer = match[3].trim()
+                    const company = match[4].trim()
+                    const language = match[5].trim()
                     const status = hasStatus ? match[6].trim() : ""
 
                     parsed.push({
                         id: match[1],
                         whatsapp: phone,
-                        referrer: match[3],
-                        company: match[4],
-                        language: match[5],
+                        referrer: referrer,
+                        company: company,
+                        language: language,
                         status: status,
                     })
+                } else {
+                    console.warn(`Could not parse line ${lineIndex + 1}: ${line.substring(0, 100)}...`)
                 }
             }
         })
 
+        console.log(`Parsed ${parsed.length} records from ${lines.filter((l) => l.trim()).length} non-empty lines`)
         return parsed
     }
 
