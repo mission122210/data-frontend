@@ -11,6 +11,7 @@ export default function DataMatcher() {
     const [draggedItem, setDraggedItem] = useState(null)
     const [newStatusName, setNewStatusName] = useState("")
     const [showNewStatusInput, setShowNewStatusInput] = useState(false)
+    const [debugInfo, setDebugInfo] = useState(null)
 
     // Undo functionality
     const [history, setHistory] = useState([])
@@ -22,9 +23,23 @@ export default function DataMatcher() {
     const [draggedStatus, setDraggedStatus] = useState(null)
     const [dropTargets, setDropTargets] = useState([])
 
+    const normalizePhoneNumber = (phone) => {
+        if (!phone) return ""
+        // Remove all non-digit characters except the leading +
+        let normalized = phone.replace(/[^\d+]/g, "")
+        // If it starts with +, keep it, otherwise remove any + signs
+        if (normalized.startsWith("+")) {
+            normalized = "+" + normalized.substring(1).replace(/\+/g, "")
+        } else {
+            normalized = normalized.replace(/\+/g, "")
+        }
+        return normalized
+    }
+
     const parseData = (rawData, hasStatus = false) => {
         const lines = rawData.trim().split("\n")
         const parsed = []
+        const failedLines = []
 
         lines.forEach((line, lineIndex) => {
             // Clean the line first - remove extra whitespace and normalize
@@ -32,18 +47,19 @@ export default function DataMatcher() {
 
             if (!cleanLine) return // Skip empty lines
 
-            // Try new format first - more flexible regex with optional spaces
+            // Try new format first - more flexible regex with optional 年龄 field
             let match = cleanLine.match(
-                /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推手名字\s*:\s*([^业]+?)\s*业务员\s*:\s*([^年]+?)\s*年龄\s*:\s*[^公]+?\s*公司\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)(.*)$/i,
+                /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s\-()]+)\s+(?:推手名字|Promoter\s+Name)\s*:\s*([^业务员]+?)\s*(?:业务员|Salesperson)\s*:\s*([^年龄公]+?)(?:\s*年龄\s*:\s*[^公]*?)?\s*公司\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)\s*(.*)$/i,
             )
 
             if (match) {
-                const phone = match[2].replace(/\s+/g, "")
+                const phone = normalizePhoneNumber(match[2])
                 const referrer = match[3].trim()
                 const businessPerson = match[4].trim()
                 const company = match[5].trim()
                 const language = match[6].trim()
-                const status = hasStatus ? match[7].trim() : ""
+                const statusText = match[7].trim()
+                const status = hasStatus ? extractActualStatus(statusText) : ""
 
                 parsed.push({
                     id: match[1],
@@ -55,17 +71,18 @@ export default function DataMatcher() {
                     status: status,
                 })
             } else {
-                // Try old format - also more flexible
+                // Try old format - also more flexible with optional fields
                 match = cleanLine.match(
-                    /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s]+)\s+推荐人[：:]\s*Referrer\s*:\s*([^公]+?)\s*公司\s*Company\s+Name\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)(.*)$/i,
+                    /(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s\-()]+)\s+推荐人[：:]\s*Referrer\s*:\s*([^公]+?)\s*公司\s*Company\s+Name\s*:\s*([^语]+?)\s*语言\s*:\s*(\w+)\s*(.*)$/i,
                 )
 
                 if (match) {
-                    const phone = match[2].replace(/\s+/g, "")
+                    const phone = normalizePhoneNumber(match[2])
                     const referrer = match[3].trim()
                     const company = match[4].trim()
                     const language = match[5].trim()
-                    const status = hasStatus ? match[6].trim() : ""
+                    const statusText = match[6].trim()
+                    const status = hasStatus ? extractActualStatus(statusText) : ""
 
                     parsed.push({
                         id: match[1],
@@ -76,13 +93,99 @@ export default function DataMatcher() {
                         status: status,
                     })
                 } else {
-                    console.warn(`Could not parse line ${lineIndex + 1}: ${line.substring(0, 100)}...`)
+                    match = cleanLine.match(/(?:编号|ID|Number)\s*:\s*(\d+)\s+WhatsApp\s+([+\d\s\-()]+)\s+(.+?)$/i)
+
+                    if (match) {
+                        const phone = normalizePhoneNumber(match[2])
+                        const remainingText = match[3].trim()
+
+                        const status = hasStatus ? extractActualStatus(remainingText) : ""
+
+                        parsed.push({
+                            id: match[1],
+                            whatsapp: phone,
+                            referrer: remainingText.substring(0, 50), // Use first part as referrer
+                            company: "Unknown",
+                            language: "Unknown",
+                            businessPerson: "",
+                            status: status,
+                        })
+                    } else {
+                        failedLines.push({ lineIndex: lineIndex + 1, content: line.substring(0, 100) })
+                    }
                 }
             }
         })
 
         console.log(`Parsed ${parsed.length} records from ${lines.filter((l) => l.trim()).length} non-empty lines`)
-        return parsed
+        if (failedLines.length > 0) {
+            console.warn(`Failed to parse ${failedLines.length} lines:`, failedLines)
+        }
+
+        return { parsed, failedLines }
+    }
+
+    const extractActualStatus = (text) => {
+        if (!text) return ""
+
+        // Common status patterns - these are typically at the end of the line
+        const statusPatterns = [
+            /\b(Online|Offline|Training|Active|Inactive|Blocked|Available|Busy|Away|Do not disturb)\b/i,
+            /\b(在线|离线|培训|活跃|不活跃|被阻止|可用|忙碌|离开)\b/i,
+            /\b(Not interested|Interested|Pending|Confirmed|Cancelled|Completed)\b/i,
+            /\b(Details|More info|Contact|Follow up)\b/i,
+        ]
+
+        // Try to find a known status pattern
+        for (const pattern of statusPatterns) {
+            const match = text.match(pattern)
+            if (match) {
+                return match[1]
+            }
+        }
+
+        // If no known pattern found, try to get the last meaningful word/phrase
+        // Remove any field labels that might have been included
+        const cleanText = text
+            .replace(/Promoter Name:\s*/gi, "")
+            .replace(/Salesperson:\s*/gi, "")
+            .replace(/Age:\s*/gi, "")
+            .replace(/Company:\s*/gi, "")
+            .replace(/Language:\s*/gi, "")
+            .replace(/推手名字:\s*/gi, "")
+            .replace(/业务员:\s*/gi, "")
+            .replace(/年龄:\s*/gi, "")
+            .replace(/公司:\s*/gi, "")
+            .replace(/语言:\s*/gi, "")
+            .trim()
+
+        // Get the last word or phrase (likely the status)
+        const words = cleanText.split(/\s+/)
+        if (words.length > 0) {
+            // If it's a single word, return it
+            if (words.length === 1) {
+                return words[0]
+            }
+            // If multiple words, try to get the last 1-2 words that look like a status
+            const lastWord = words[words.length - 1]
+            const secondLastWord = words.length > 1 ? words[words.length - 2] : ""
+
+            // Check if last word looks like a status
+            if (lastWord.length > 2 && /^[A-Za-z\u4e00-\u9fff]+$/.test(lastWord)) {
+                // If second last word is also short and looks like part of status, combine them
+                if (
+                    secondLastWord.length > 0 &&
+                    secondLastWord.length <= 10 &&
+                    /^[A-Za-z\u4e00-\u9fff]+$/.test(secondLastWord)
+                ) {
+                    return `${secondLastWord} ${lastWord}`
+                }
+                return lastWord
+            }
+        }
+
+        // If all else fails, return the cleaned text (but limit length)
+        return cleanText.substring(0, 50)
     }
 
     const saveToHistory = (data) => {
@@ -134,12 +237,40 @@ export default function DataMatcher() {
         setIsProcessing(true)
 
         try {
-            const dataset1 = parseData(data1, false)
-            const dataset2 = parseData(data2, true)
+            const result1 = parseData(data1, false)
+            const result2 = parseData(data2, true)
+
+            const dataset1 = result1.parsed
+            const dataset2 = result2.parsed
+
+            const dataset1Phones = new Set(dataset1.map((item) => item.whatsapp))
+            const dataset2Phones = new Set(dataset2.map((item) => item.whatsapp))
+            const commonPhones = new Set([...dataset1Phones].filter((phone) => dataset2Phones.has(phone)))
+
+            const debugInfo = {
+                dataset1Count: dataset1.length,
+                dataset2Count: dataset2.length,
+                dataset1Phones: Array.from(dataset1Phones).slice(0, 10), // Show first 10 for preview
+                dataset2Phones: Array.from(dataset2Phones).slice(0, 10), // Show first 10 for preview
+                commonPhonesCount: commonPhones.size,
+                commonPhones: Array.from(commonPhones).slice(0, 10),
+                failedLines1: result1.failedLines,
+                failedLines2: result2.failedLines,
+                totalLines1: data1
+                    .trim()
+                    .split("\n")
+                    .filter((l) => l.trim()).length,
+                totalLines2: data2
+                    .trim()
+                    .split("\n")
+                    .filter((l) => l.trim()).length,
+            }
 
             const statusMap = {}
             dataset2.forEach((item) => {
-                statusMap[item.whatsapp] = item.status
+                if (item.whatsapp) {
+                    statusMap[item.whatsapp] = item.status
+                }
             })
 
             const matched = dataset1.map((item) => ({
@@ -149,11 +280,13 @@ export default function DataMatcher() {
 
             setMatchedData(matched)
             setStatusSummary(generateStatusSummary(matched))
+            setDebugInfo(debugInfo)
 
             // Save initial state to history
             saveToHistory(matched)
         } catch (error) {
             alert("Error processing data. Please check the format.")
+            console.error("Matching error:", error)
         }
 
         setIsProcessing(false)
@@ -451,6 +584,137 @@ export default function DataMatcher() {
                     </button>
                 </div>
             </div>
+
+            {debugInfo && (
+                <div className="p-6 border-b border-gray-700 bg-gray-750">
+                    <h3 className="text-lg font-semibold text-gray-100 mb-4">📊 Matching Analysis</h3>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        {/* Dataset Statistics */}
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-200 mb-2">Dataset Statistics</h4>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 1 (Total Lines):</span>
+                                    <span className="text-white font-mono">{debugInfo.totalLines1}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 1 (Parsed):</span>
+                                    <span className="text-white font-mono">{debugInfo.dataset1Count}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 2 (Total Lines):</span>
+                                    <span className="text-white font-mono">{debugInfo.totalLines2}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 2 (Parsed):</span>
+                                    <span className="text-white font-mono">{debugInfo.dataset2Count}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Matching Results */}
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-200 mb-2">Matching Results</h4>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Common Phone Numbers:</span>
+                                    <span className={`font-mono ${debugInfo.commonPhonesCount > 0 ? "text-green-400" : "text-red-400"}`}>
+                                        {debugInfo.commonPhonesCount}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Match Rate:</span>
+                                    <span className={`font-mono ${debugInfo.commonPhonesCount > 0 ? "text-green-400" : "text-red-400"}`}>
+                                        {debugInfo.dataset1Count > 0
+                                            ? ((debugInfo.commonPhonesCount / debugInfo.dataset1Count) * 100).toFixed(1)
+                                            : 0}
+                                        %
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Parsing Issues */}
+                        <div className="bg-gray-700 p-4 rounded-lg">
+                            <h4 className="font-medium text-gray-200 mb-2">Parsing Issues</h4>
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 1 Failed:</span>
+                                    <span
+                                        className={`font-mono ${debugInfo.failedLines1.length > 0 ? "text-yellow-400" : "text-green-400"}`}
+                                    >
+                                        {debugInfo.failedLines1.length}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-gray-300">Dataset 2 Failed:</span>
+                                    <span
+                                        className={`font-mono ${debugInfo.failedLines2.length > 0 ? "text-yellow-400" : "text-green-400"}`}
+                                    >
+                                        {debugInfo.failedLines2.length}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Phone Number Previews */}
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h4 className="font-medium text-gray-200 mb-2">Dataset 1 Phone Numbers (Preview)</h4>
+                            <div className="bg-gray-800 p-3 rounded text-xs font-mono text-gray-300 max-h-32 overflow-y-auto">
+                                {debugInfo.dataset1Phones.length > 0 ? (
+                                    debugInfo.dataset1Phones.map((phone, i) => <div key={i}>{phone}</div>)
+                                ) : (
+                                    <div className="text-red-400">No phone numbers found</div>
+                                )}
+                                {debugInfo.dataset1Phones.length >= 10 && <div className="text-gray-500">... and more</div>}
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="font-medium text-gray-200 mb-2">Dataset 2 Phone Numbers (Preview)</h4>
+                            <div className="bg-gray-800 p-3 rounded text-xs font-mono text-gray-300 max-h-32 overflow-y-auto">
+                                {debugInfo.dataset2Phones.length > 0 ? (
+                                    debugInfo.dataset2Phones.map((phone, i) => <div key={i}>{phone}</div>)
+                                ) : (
+                                    <div className="text-red-400">No phone numbers found</div>
+                                )}
+                                {debugInfo.dataset2Phones.length >= 10 && <div className="text-gray-500">... and more</div>}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Common Phone Numbers */}
+                    {debugInfo.commonPhonesCount > 0 && (
+                        <div className="mt-4">
+                            <h4 className="font-medium text-gray-200 mb-2">✅ Matching Phone Numbers</h4>
+                            <div className="bg-gray-800 p-3 rounded text-xs font-mono text-green-300 max-h-32 overflow-y-auto">
+                                {debugInfo.commonPhones.map((phone, i) => (
+                                    <div key={i}>{phone}</div>
+                                ))}
+                                {debugInfo.commonPhones.length >= 10 && <div className="text-gray-500">... and more</div>}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Warning for no matches */}
+                    {debugInfo.commonPhonesCount === 0 && debugInfo.dataset1Count > 0 && debugInfo.dataset2Count > 0 && (
+                        <div className="mt-4 p-4 bg-red-900 border border-red-700 rounded-lg">
+                            <h4 className="font-medium text-red-200 mb-2">⚠️ No Matching Phone Numbers Found</h4>
+                            <p className="text-red-300 text-sm">
+                                The phone numbers in your two datasets don't match. Please verify that:
+                            </p>
+                            <ul className="text-red-300 text-sm mt-2 ml-4 list-disc">
+                                <li>You're using the correct datasets that should have overlapping phone numbers</li>
+                                <li>The phone number formats are consistent between datasets</li>
+                                <li>The data contains the same contacts with different status information</li>
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Results Section */}
             {matchedData.length > 0 && (
