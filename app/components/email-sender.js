@@ -107,7 +107,7 @@ anniecorbin86@gmail.com`,
 
         setIsSending(true)
         try {
-            const response = await fetch("https://data-backend-iota.vercel.app/send-email", {
+            const response = await fetch("https://data-backend-two.vercel.app/send-email", {
                 method: "POST",
                 body: formData,
             })
