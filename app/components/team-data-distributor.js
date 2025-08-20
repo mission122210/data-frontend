@@ -1,6 +1,6 @@
 "use client"
 import { useState } from "react"
-import { Send } from "lucide-react" // Import the Send icon
+import { Send, Trash2 } from "lucide-react" // Import the Send and Trash2 icons
 
 export default function TeamDataDistributor() {
     const [teamDataInput, setTeamDataInput] = useState("") // New simplified input for team data
@@ -15,7 +15,6 @@ export default function TeamDataDistributor() {
     const [totalClientsDistributed, setTotalClientsDistributed] = useState(0) // Total clients initially distributed
     const [availableClientsForManualDistribution, setAvailableClientsForManualDistribution] = useState(0) // Clients freed up by manual reduction
 
-    // Telegram numbers mapping (stored as provided by user, including spaces and +)
     const telegramNumbers = {
         Alpha411: "+855 71 445 4362",
         Adam: "+1 754 248 5995",
@@ -23,11 +22,11 @@ export default function TeamDataDistributor() {
         Hadi108: "+923017029487",
         Lucky454: "+1 267 344 7066",
         Sardar428: "+1 206 334 7270",
-        Glock425: "+1 332 265 8872",
+        Glock425: "+1 267 238 7026", // Updated number
         Zubair410: "+1 646 842 9903",
         Jerry439: "+1 929 584 7375",
         Pikki: "+1 206 396 8715",
-        Peeko: "+1 917 436 7632",
+        Peeko: "+1 332 276 4174", // Updated number
         Jutt420: "+1 213 682 8318",
         Mike431: "+1 628 309 8128",
         Master122: "+1 816 217 8661",
@@ -307,6 +306,75 @@ export default function TeamDataDistributor() {
         })
     }
 
+    const removeTeamMember = (memberName) => {
+        if (
+            !confirm(
+                `Are you sure you want to remove ${memberName} from the distribution? Their assigned data will be redistributed to other members.`,
+            )
+        ) {
+            return
+        }
+
+        setProcessedTeamData((prevData) => {
+            const memberToRemove = prevData.find((m) => m.name === memberName)
+            if (!memberToRemove) return prevData
+
+            const clientsToRedistribute = memberToRemove.newClients
+            const remainingActiveMembers = prevData.filter((m) => m.name !== memberName && m.newClients > 0)
+
+            if (remainingActiveMembers.length === 0) {
+                alert("Cannot remove data when no other members have assigned clients!")
+                return prevData
+            }
+
+            const clientsPerMember = Math.floor(clientsToRedistribute / remainingActiveMembers.length)
+            const extraClients = clientsToRedistribute % remainingActiveMembers.length
+
+            const updatedData = prevData.map((member) => {
+                if (member.name === memberName) {
+                    const updatedCurrentData = member.initialData // Reset to initial data only
+                    const updatedClients = member.initialClients // Reset to initial clients only
+                    const updatedMonthlyData = member.initialMonthlyData // Reset to initial monthly data
+                    const newAverage = updatedClients > 0 ? updatedMonthlyData / updatedClients : Number.POSITIVE_INFINITY
+
+                    return {
+                        ...member,
+                        newClients: 0, // Set to 0 instead of removing
+                        currentData: updatedCurrentData,
+                        averageValue: newAverage,
+                    }
+                } else {
+                    const isActiveMember = remainingActiveMembers.some((rm) => rm.name === member.name)
+                    if (isActiveMember) {
+                        const memberIndex = remainingActiveMembers.findIndex((rm) => rm.name === member.name)
+                        const additionalClients = clientsPerMember + (memberIndex < extraClients ? 1 : 0)
+                        const newNewClients = member.newClients + additionalClients
+                        const updatedCurrentData = member.initialData + newNewClients
+                        const updatedClients = member.initialClients + newNewClients
+                        const updatedMonthlyData = member.initialMonthlyData + newNewClients
+                        const newAverage = updatedClients > 0 ? updatedMonthlyData / updatedClients : Number.POSITIVE_INFINITY
+
+                        return {
+                            ...member,
+                            newClients: newNewClients,
+                            currentData: updatedCurrentData,
+                            averageValue: newAverage,
+                        }
+                    }
+                    return member // Keep inactive members unchanged
+                }
+            })
+
+            setSentMembers((prev) => {
+                const newSet = new Set(prev)
+                newSet.delete(memberName)
+                return newSet
+            })
+
+            return updatedData
+        })
+    }
+
     const handleSendToTelegram = (memberName) => {
         const rawPhoneNumber = telegramNumbers[memberName]
         if (!rawPhoneNumber) {
@@ -321,8 +389,35 @@ export default function TeamDataDistributor() {
         }
         const messageText = clientsForMember.map((client) => client.content).join("\n")
         const encodedMessage = encodeURIComponent(messageText)
-        const cleanPhoneForWeb = rawPhoneNumber.replace(/\s/g, "")
-        window.open(`https://t.me/${cleanPhoneForWeb}?text=${encodedMessage}`, "_blank")
+        const cleanPhoneForApp = rawPhoneNumber.replace(/\s/g, "")
+
+        // Try to launch Telegram app first, fallback to web if it fails
+        const telegramAppUrl = `tg://resolve?domain=${cleanPhoneForApp}&text=${encodedMessage}`
+        const telegramWebUrl = `https://t.me/${cleanPhoneForApp}?text=${encodedMessage}`
+
+        // Create a temporary link to try app launch
+        const tempLink = document.createElement("a")
+        tempLink.href = telegramAppUrl
+        tempLink.style.display = "none"
+        document.body.appendChild(tempLink)
+
+        // Try to click the app link
+        try {
+            tempLink.click()
+            // Set a timeout to check if app opened, if not open web version
+            setTimeout(() => {
+                if (document.hasFocus()) {
+                    // App didn't open, use web version
+                    window.open(telegramWebUrl, "_blank")
+                }
+            }, 1000)
+        } catch (error) {
+            // Fallback to web version
+            window.open(telegramWebUrl, "_blank")
+        } finally {
+            document.body.removeChild(tempLink)
+        }
+
         setSentMembers((prev) => new Set(prev).add(memberName))
     }
 
@@ -604,6 +699,13 @@ OR just phone numbers:
                                                     ) : (
                                                         member.newClients > 0 && <span className="text-red-400 text-xs">No Telegram #</span>
                                                     )}
+                                                    <button
+                                                        onClick={() => removeTeamMember(member.name)}
+                                                        className="px-3 py-1 rounded-md text-xs bg-red-500 text-white hover:bg-red-600 flex items-center"
+                                                        title="Remove member and redistribute their data"
+                                                    >
+                                                        <Trash2 className="w-3 h-3 mr-1" /> Remove
+                                                    </button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -664,6 +766,9 @@ OR just phone numbers:
                         6. Use "Copy Distributed Phone Numbers" to copy phone assignments (Phone in one column, Team Member in next)
                     </li>
                     <li>7. Click "Send to Telegram" next to a team member to send their assigned phone numbers directly.</li>
+                    <li>
+                        8. <strong>NEW:</strong> Click "Remove" to remove a team member and redistribute their data to others.
+                    </li>
                 </ul>
                 <div className="mt-4 p-3 bg-blue-900 rounded-lg">
                     <h5 className="text-sm font-medium text-blue-100 mb-1">Phone Number Detection:</h5>
@@ -672,6 +777,14 @@ OR just phone numbers:
                         <li>• Each phone number found = 1 data piece for distribution</li>
                         <li>• Supports international formats with country codes</li>
                         <li>• No need for specific formatting - just paste your data!</li>
+                    </ul>
+                </div>
+                <div className="mt-4 p-3 bg-green-900 rounded-lg">
+                    <h5 className="text-sm font-medium text-green-100 mb-1">Telegram Integration:</h5>
+                    <ul className="text-xs text-green-200 space-y-1">
+                        <li>• "Send to Telegram" now tries to launch the Telegram app first</li>
+                        <li>• If the app doesn't open, it will fallback to the web version</li>
+                        <li>• Updated phone numbers: Glock425 (+1 267 238 7026), Peeko (+1 332 276 4174)</li>
                     </ul>
                 </div>
             </div>
