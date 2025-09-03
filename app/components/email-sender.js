@@ -107,7 +107,7 @@ anniecorbin86@gmail.com`,
 
         setIsSending(true)
         try {
-            const response = await fetch("https://data-backend-two.vercel.app/send-email", {
+            const response = await fetch("https://data-backend-rho.vercel.app", {
                 method: "POST",
                 body: formData,
             })
